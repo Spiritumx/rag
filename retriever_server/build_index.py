@@ -29,7 +29,7 @@ def hash_object(o: Any) -> str:
 
 
 def make_hotpotqa_documents(elasticsearch_index: str, metadata: Union[Dict[str, int], None] = None):
-    raw_glob_filepath = os.path.join("download", "raw_data", "hotpotqa", "wikpedia-paragraphs", "*", "wiki_*.bz2")
+    raw_glob_filepath = os.path.join("/root/autodl-tmp/raw_data", "hotpotqa", "wikpedia-paragraphs", "*", "wiki_*.bz2")
     metadata = metadata or {"idx": 1}
     assert "idx" in metadata
     for filepath in tqdm(glob.glob(raw_glob_filepath)):
@@ -63,7 +63,7 @@ def make_hotpotqa_documents(elasticsearch_index: str, metadata: Union[Dict[str, 
 
 
 def make_iirc_documents(elasticsearch_index: str, metadata: Union[Dict[str, int], None] = None):
-    raw_filepath = os.path.join("download", "raw_data", "iirc", "context_articles.json")
+    raw_filepath = os.path.join("/root/autodl-tmp/raw_data", "iirc", "context_articles.json")
 
     metadata = metadata or {"idx": 1}
     assert "idx" in metadata
@@ -111,9 +111,9 @@ def make_iirc_documents(elasticsearch_index: str, metadata: Union[Dict[str, int]
 
 def make_2wikimultihopqa_documents(elasticsearch_index: str, metadata: Union[Dict[str, int], None] = None):
     raw_filepaths = [
-        os.path.join("download", "raw_data", "2wikimultihopqa", "train.json"),
-        os.path.join("download", "raw_data", "2wikimultihopqa", "dev.json"),
-        os.path.join("download", "raw_data", "2wikimultihopqa", "test.json"),
+        os.path.join("/root/autodl-tmp/raw_data", "2wikimultihopqa", "train.json"),
+        os.path.join("/root/autodl-tmp/raw_data", "2wikimultihopqa", "dev.json"),
+        os.path.join("/root/autodl-tmp/raw_data", "2wikimultihopqa", "test.json"),
     ]
     metadata = metadata or {"idx": 1}
     assert "idx" in metadata
@@ -160,12 +160,12 @@ def make_2wikimultihopqa_documents(elasticsearch_index: str, metadata: Union[Dic
 
 def make_musique_documents(elasticsearch_index: str, metadata: Union[Dict[str, int], None] = None):
     raw_filepaths = [
-        os.path.join("download", "raw_data", "musique", "musique_ans_v1.0_dev.jsonl"),
-        os.path.join("download", "raw_data", "musique", "musique_ans_v1.0_test.jsonl"),
-        os.path.join("download", "raw_data", "musique", "musique_ans_v1.0_train.jsonl"),
-        os.path.join("download", "raw_data", "musique", "musique_full_v1.0_dev.jsonl"),
-        os.path.join("download", "raw_data", "musique", "musique_full_v1.0_test.jsonl"),
-        os.path.join("download", "raw_data", "musique", "musique_full_v1.0_train.jsonl"),
+        os.path.join("/root/autodl-tmp/raw_data", "musique", "musique_ans_v1.0_dev.jsonl"),
+        os.path.join("/root/autodl-tmp/raw_data", "musique", "musique_ans_v1.0_test.jsonl"),
+        os.path.join("/root/autodl-tmp/raw_data", "musique", "musique_ans_v1.0_train.jsonl"),
+        os.path.join("/root/autodl-tmp/raw_data", "musique", "musique_full_v1.0_dev.jsonl"),
+        os.path.join("/root/autodl-tmp/raw_data", "musique", "musique_full_v1.0_test.jsonl"),
+        os.path.join("/root/autodl-tmp/raw_data", "musique", "musique_full_v1.0_train.jsonl"),
     ]
     metadata = metadata or {"idx": 1}
     assert "idx" in metadata
@@ -212,7 +212,7 @@ def make_musique_documents(elasticsearch_index: str, metadata: Union[Dict[str, i
                     metadata["idx"] += 1
 
 def make_wiki_documents(elasticsearch_index: str, metadata: Union[Dict[str, int], None] = None):
-    raw_glob_filepath = os.path.join("download", "raw_data", "wiki", 'psgs_w100.tsv')
+    raw_glob_filepath = os.path.join("/root/autodl-tmp/raw_data", "wiki", 'psgs_w100.tsv')
     metadata = metadata or {"idx": 1}
     assert "idx" in metadata
 

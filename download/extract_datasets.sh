@@ -7,7 +7,7 @@ set -e  # 遇到错误时退出
 
 # 定义源目录和目标目录
 SOURCE_DIR="/root/autodl-fs"
-TARGET_DIR="./raw_data"
+TARGET_DIR="/root/autodl-tmp/raw_data"
 
 # 创建目标目录（如果不存在）
 mkdir -p "$TARGET_DIR"
