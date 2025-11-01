@@ -1,0 +1,5 @@
+download/raw_data/
+processed_data/
+# pixi environments
+.pixi/*
+!.pixi/config.toml
