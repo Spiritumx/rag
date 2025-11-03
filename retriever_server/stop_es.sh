@@ -5,7 +5,10 @@ set -euo pipefail
 BASE_DIR="$(cd "$(dirname "$0")" && pwd)"
 RUN_DIR="$BASE_DIR/es_run"
 PID_FILE=$RUN_DIR/elasticsearch.pid
-ES_BIN=/usr/share/elasticsearch/bin/elasticsearch
+ES_VERSION="8.15.0"
+DIST_DIR="$BASE_DIR/es_dist"
+ES_HOME="$DIST_DIR/elasticsearch-$ES_VERSION"
+ES_BIN="$ES_HOME/bin/elasticsearch"
 
 # 优雅停止
 if [ -f "$PID_FILE" ]; then
