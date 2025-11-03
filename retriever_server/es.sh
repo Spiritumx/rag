@@ -148,19 +148,30 @@ EOF
   fi
 
   export ES_PATH_CONF="$CONFIG_DIR"
+  
   # 以 elasticsearch 用户启动；若用户不存在或 su 不可用，提示并以当前用户启动
+  USE_CURRENT_USER=false
   if id "$ES_USER" >/dev/null 2>&1; then
     if command -v su >/dev/null 2>&1; then
       su -s /bin/bash -c "$ES_BIN -d -p '$PID_FILE'" "$ES_USER" || {
         echo "su 启动失败，改为当前用户直接启动" >&2
-        "$ES_BIN" -d -p "$PID_FILE"
+        USE_CURRENT_USER=true
       }
     else
       echo "su 不可用，使用当前用户启动" >&2
-      "$ES_BIN" -d -p "$PID_FILE"
+      USE_CURRENT_USER=true
     fi
   else
     echo "用户 '$ES_USER' 不存在，使用当前用户启动" >&2
+    USE_CURRENT_USER=true
+  fi
+  
+  # 如果以当前用户启动且当前用户是 root，需要允许 root 运行
+  if [ "$USE_CURRENT_USER" = "true" ]; then
+    if [ "$(id -u)" -eq 0 ]; then
+      export ES_JAVA_OPTS="${ES_JAVA_OPTS:-} -Des.allow.root=true"
+      echo "Running as root, allowing root execution" >&2
+    fi
     "$ES_BIN" -d -p "$PID_FILE"
   fi
 
