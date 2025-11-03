@@ -40,6 +40,8 @@ cmd_install() {
     echo "Downloading Elasticsearch $ES_VERSION ..."
     curl -fSL "$URL" -o "$DIST_DIR/$TGZ"
     tar -xzf "$DIST_DIR/$TGZ" -C "$DIST_DIR"
+    # 确保二进制可执行
+    chmod +x "$ES_HOME/bin/"* 2>/dev/null || true
   else
     echo "Elasticsearch binary exists: $ES_BIN"
   fi
@@ -113,6 +115,10 @@ cmd_start() {
     echo "Elasticsearch binary not found. Please run: $(basename "$0") install" >&2
     exit 1
   fi
+  # 再次确保可执行权限
+  if [ ! -x "$ES_BIN" ]; then
+    chmod +x "$ES_HOME/bin/"* 2>/dev/null || true
+  fi
   if [ ! -f "$CONFIG_DIR/elasticsearch.yml" ]; then
     echo "Config not found. Please run: $(basename "$0") install" >&2
     exit 1
@@ -163,7 +169,12 @@ EOF
       fi
     fi
     if id "$ES_USER" >/dev/null 2>&1; then
-      chown -R "$ES_USER":"$ES_USER" "$DATA_DIR" "$LOG_DIR" "$RUN_DIR" "$CONFIG_DIR" 2>/dev/null || true
+      # 确保非特权用户能访问父目录路径（/root 及其子目录需要 o+rx）
+      chmod o+rx /root 2>/dev/null || true
+      chmod o+rx /root/graduateRAG 2>/dev/null || true
+      chmod o+rx "$BASE_DIR" 2>/dev/null || true
+      # 将 ES 发行包、配置、数据、日志、运行目录授权给非特权用户
+      chown -R "$ES_USER":"$ES_USER" "$DIST_DIR" "$CONFIG_DIR" "$DATA_DIR" "$LOG_DIR" "$RUN_DIR" 2>/dev/null || true
       if command -v su >/dev/null 2>&1; then
         su -s "$SHELL_BIN" -c "$ES_BIN -d -p '$PID_FILE'" "$ES_USER"
       else

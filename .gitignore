@@ -1,5 +1,6 @@
 download/raw_data/
 processed_data/
+retriever_server/es_*
 # pixi environments
 .pixi/*
 !.pixi/config.toml
