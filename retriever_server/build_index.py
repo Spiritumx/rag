@@ -299,7 +299,18 @@ if __name__ == "__main__":
         }
     }
 
-    index_exists = es.indices.exists(index=elasticsearch_index)
+    # Check if index exists - using try/except for compatibility
+    try:
+        index_exists = es.indices.exists(index=elasticsearch_index)
+    except:
+        # Fallback for newer ES client versions
+        from elasticsearch import NotFoundError
+        try:
+            es.indices.get(index=elasticsearch_index)
+            index_exists = True
+        except NotFoundError:
+            index_exists = False
+    
     print("Index already exists" if index_exists else "Index doesn't exist.")
 
     # delete index if exists
@@ -313,7 +324,7 @@ if __name__ == "__main__":
 
     # create index
     print("Creating Index ...")
-    es.indices.create(index=elasticsearch_index, body=paragraphs_index_settings)
+    es.indices.create(index=elasticsearch_index, mappings=paragraphs_index_settings["mappings"])
 
     if args.dataset_name == "hotpotqa":
         make_documents = make_hotpotqa_documents
