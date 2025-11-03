@@ -90,6 +90,17 @@ EOF
     echo "Created $CONFIG_DIR/jvm.options.d/heap.options"
   fi
 
+  # 准备 jvm.options：优先复制发行包默认文件，否则创建空文件占位
+  if [ ! -f "$CONFIG_DIR/jvm.options" ]; then
+    if [ -f "$ES_HOME/config/jvm.options" ]; then
+      cp "$ES_HOME/config/jvm.options" "$CONFIG_DIR/jvm.options"
+      echo "Copied default jvm.options to $CONFIG_DIR"
+    else
+      : > "$CONFIG_DIR/jvm.options"
+      echo "Created empty $CONFIG_DIR/jvm.options"
+    fi
+  fi
+
   # 非 root 环境 chown 可能失败，忽略即可
   chown -R "$ES_USER":"$ES_USER" "$DATA_DIR" "$LOG_DIR" "$RUN_DIR" 2>/dev/null || true
   echo "Install finished."
@@ -119,6 +130,15 @@ appender.console.layout.pattern = [%d{ISO8601}][%-5p][%-25c] %marker%.-10000m%n
 rootLogger.level = info
 rootLogger.appenderRef.console.ref = console
 EOF
+    fi
+  fi
+
+  # 确保 jvm.options 存在（防御性处理，避免缺失）
+  if [ ! -f "$CONFIG_DIR/jvm.options" ]; then
+    if [ -f "$ES_HOME/config/jvm.options" ]; then
+      cp "$ES_HOME/config/jvm.options" "$CONFIG_DIR/jvm.options"
+    else
+      : > "$CONFIG_DIR/jvm.options"
     fi
   fi
 
