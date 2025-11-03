@@ -11,8 +11,8 @@ ES_BIN=/usr/share/elasticsearch/bin/elasticsearch
 ES_USER=elasticsearch
 
 # 准备目录与权限（需要 sudo；若容器无 sudo，请去掉 sudo 再执行）
-sudo mkdir -p "$DATA_DIR" "$LOG_DIR" "$RUN_DIR"
-sudo chown -R "$ES_USER":"$ES_USER" "$DATA_DIR" "$LOG_DIR" "$RUN_DIR"
+mkdir -p "$DATA_DIR" "$LOG_DIR" "$RUN_DIR"
+chown -R "$ES_USER":"$ES_USER" "$DATA_DIR" "$LOG_DIR" "$RUN_DIR"
 
 # 已在运行则跳过
 if [ -f "$PID_FILE" ] && ps -p "$(cat "$PID_FILE" 2>/dev/null)" >/dev/null 2>&1; then
@@ -21,7 +21,7 @@ if [ -f "$PID_FILE" ] && ps -p "$(cat "$PID_FILE" 2>/dev/null)" >/dev/null 2>&1;
 fi
 
 # 后台启动（写入 PID 文件）
-sudo -u "$ES_USER" "$ES_BIN" -d -p "$PID_FILE"
+su -s /bin/bash -c "$ES_BIN -d -p $PID_FILE" "$ES_USER"
 
 echo "Elasticsearch starting... PID file: $PID_FILE"
 
