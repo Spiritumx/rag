@@ -62,6 +62,25 @@ EOF
     echo "Config exists: $CONFIG_DIR/elasticsearch.yml"
   fi
 
+  # 准备日志配置：优先复制发行包默认配置，如不可用则生成最小配置
+  if [ ! -f "$CONFIG_DIR/log4j2.properties" ]; then
+    if [ -f "$ES_HOME/config/log4j2.properties" ]; then
+      cp "$ES_HOME/config/log4j2.properties" "$CONFIG_DIR/log4j2.properties"
+      echo "Copied default log4j2.properties to $CONFIG_DIR"
+    else
+      cat > "$CONFIG_DIR/log4j2.properties" <<'EOF'
+status = error
+appender.console.type = Console
+appender.console.name = console
+appender.console.layout.type = PatternLayout
+appender.console.layout.pattern = [%d{ISO8601}][%-5p][%-25c] %marker%.-10000m%n
+rootLogger.level = info
+rootLogger.appenderRef.console.ref = console
+EOF
+      echo "Created minimal log4j2.properties at $CONFIG_DIR"
+    fi
+  fi
+
   mkdir -p "$CONFIG_DIR/jvm.options.d"
   if [ ! -f "$CONFIG_DIR/jvm.options.d/heap.options" ]; then
     cat > "$CONFIG_DIR/jvm.options.d/heap.options" <<'EOF'
@@ -86,6 +105,21 @@ cmd_start() {
   if [ ! -f "$CONFIG_DIR/elasticsearch.yml" ]; then
     echo "Config not found. Please run: $(basename "$0") install" >&2
     exit 1
+  fi
+  if [ ! -f "$CONFIG_DIR/log4j2.properties" ]; then
+    if [ -f "$ES_HOME/config/log4j2.properties" ]; then
+      cp "$ES_HOME/config/log4j2.properties" "$CONFIG_DIR/log4j2.properties"
+    else
+      cat > "$CONFIG_DIR/log4j2.properties" <<'EOF'
+status = error
+appender.console.type = Console
+appender.console.name = console
+appender.console.layout.type = PatternLayout
+appender.console.layout.pattern = [%d{ISO8601}][%-5p][%-25c] %marker%.-10000m%n
+rootLogger.level = info
+rootLogger.appenderRef.console.ref = console
+EOF
+    fi
   fi
 
   if [ -f "$PID_FILE" ] && ps -p "$(cat "$PID_FILE" 2>/dev/null)" >/dev/null 2>&1; then
