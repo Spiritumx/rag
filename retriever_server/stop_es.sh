@@ -2,7 +2,8 @@
 
 set -euo pipefail
 
-RUN_DIR=/var/run/elasticsearch
+BASE_DIR="$(cd "$(dirname "$0")" && pwd)"
+RUN_DIR="$BASE_DIR/es_run"
 PID_FILE=$RUN_DIR/elasticsearch.pid
 ES_BIN=/usr/share/elasticsearch/bin/elasticsearch
 

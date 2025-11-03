@@ -25,8 +25,16 @@ apt update
 # 2) 安装 Elasticsearch（使用 8.x 稳定版）
 apt install -y elasticsearch
 
-# 3) 配置为单节点、禁用安全、监听 0.0.0.0
-tee /etc/elasticsearch/elasticsearch.yml >/dev/null <<'EOF'
+# 3) 配置为单节点、禁用安全、监听 0.0.0.0（使用项目内目录，避免 /etc 与 /var）
+ES_BASE_DIR="$(pwd)/retriever_server"
+ES_CONFIG_DIR="$ES_BASE_DIR/es_config"
+ES_DATA_DIR="$ES_BASE_DIR/es_data"
+ES_LOG_DIR="$ES_BASE_DIR/es_logs"
+ES_RUN_DIR="$ES_BASE_DIR/es_run"
+
+mkdir -p "$ES_CONFIG_DIR" "$ES_DATA_DIR" "$ES_LOG_DIR" "$ES_RUN_DIR"
+
+tee "$ES_CONFIG_DIR/elasticsearch.yml" >/dev/null <<'EOF'
 cluster.name: es-docker-cluster
 node.name: es-node
 discovery.type: single-node
@@ -35,6 +43,8 @@ xpack.security.enrollment.enabled: false
 network.host: 0.0.0.0
 http.port: 9200
 transport.port: 9300
+path.data: ./es_data
+path.logs: ./es_logs
 EOF
 
 # 4) 设置 JVM 内存参数（与 compose 保持一致 512m）
@@ -45,12 +55,12 @@ tee /etc/elasticsearch/jvm.options.d/heap.options >/dev/null <<'EOF'
 EOF
 
 # 5) 在无 systemd 环境下直接以后台进程启动 Elasticsearch
-#    准备权限与运行目录
-mkdir -p /var/lib/elasticsearch /var/log/elasticsearch /var/run/elasticsearch
-chown -R elasticsearch:elasticsearch /var/lib/elasticsearch /var/log/elasticsearch /var/run/elasticsearch
+#    准备权限与运行目录（若非 root，chown 可能失败，忽略即可）
+chown -R elasticsearch:elasticsearch "$ES_DATA_DIR" "$ES_LOG_DIR" "$ES_RUN_DIR" 2>/dev/null || true
 
 #    后台启动（写入 PID 文件）
-su -s /bin/bash -c "/usr/share/elasticsearch/bin/elasticsearch -d -p /var/run/elasticsearch/elasticsearch.pid" elasticsearch
+export ES_PATH_CONF="$ES_CONFIG_DIR"
+su -s /bin/bash -c "/usr/share/elasticsearch/bin/elasticsearch -d -p '$ES_RUN_DIR/elasticsearch.pid'" elasticsearch
 
 # 6) 健康检查等待（最多 ~5 分钟）
 set +e
