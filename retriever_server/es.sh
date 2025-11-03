@@ -148,30 +148,36 @@ EOF
   fi
 
   export ES_PATH_CONF="$CONFIG_DIR"
-  
-  # 以 elasticsearch 用户启动；若用户不存在或 su 不可用，提示并以当前用户启动
-  USE_CURRENT_USER=false
-  if id "$ES_USER" >/dev/null 2>&1; then
-    if command -v su >/dev/null 2>&1; then
-      su -s /bin/bash -c "$ES_BIN -d -p '$PID_FILE'" "$ES_USER" || {
-        echo "su 启动失败，改为当前用户直接启动" >&2
-        USE_CURRENT_USER=true
-      }
+
+  # 优先使用非 root 用户运行；如以 root 运行，尝试创建/使用 'elasticsearch' 用户
+  SHELL_BIN="/bin/bash"; [ -x "$SHELL_BIN" ] || SHELL_BIN="/bin/sh"
+
+  if [ "$(id -u)" -eq 0 ]; then
+    if ! id "$ES_USER" >/dev/null 2>&1; then
+      echo "创建非特权用户 '$ES_USER' 用于运行 Elasticsearch..."
+      if command -v useradd >/dev/null 2>&1; then
+        useradd -r -M -s "$SHELL_BIN" "$ES_USER" || true
+      elif command -v adduser >/dev/null 2>&1; then
+        # Alpine/busybox
+        adduser -D -H -s "$SHELL_BIN" "$ES_USER" || true
+      fi
+    fi
+    if id "$ES_USER" >/dev/null 2>&1; then
+      chown -R "$ES_USER":"$ES_USER" "$DATA_DIR" "$LOG_DIR" "$RUN_DIR" "$CONFIG_DIR" 2>/dev/null || true
+      if command -v su >/dev/null 2>&1; then
+        su -s "$SHELL_BIN" -c "$ES_BIN -d -p '$PID_FILE'" "$ES_USER"
+      else
+        echo "su 不可用，回退为 root 运行（不推荐）。" >&2
+        export ES_JAVA_OPTS="${ES_JAVA_OPTS:-} -Des.allow.root=true"
+        "$ES_BIN" -d -p "$PID_FILE"
+      fi
     else
-      echo "su 不可用，使用当前用户启动" >&2
-      USE_CURRENT_USER=true
+      echo "无法创建/检测到非特权用户，临时以 root 运行（不推荐）。" >&2
+      export ES_JAVA_OPTS="${ES_JAVA_OPTS:-} -Des.allow.root=true"
+      "$ES_BIN" -d -p "$PID_FILE"
     fi
   else
-    echo "用户 '$ES_USER' 不存在，使用当前用户启动" >&2
-    USE_CURRENT_USER=true
-  fi
-  
-  # 如果以当前用户启动且当前用户是 root，需要允许 root 运行
-  if [ "$USE_CURRENT_USER" = "true" ]; then
-    if [ "$(id -u)" -eq 0 ]; then
-      export ES_JAVA_OPTS="${ES_JAVA_OPTS:-} -Des.allow.root=true"
-      echo "Running as root, allowing root execution" >&2
-    fi
+    # 非 root，直接以当前用户运行
     "$ES_BIN" -d -p "$PID_FILE"
   fi
 
