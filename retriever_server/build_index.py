@@ -272,7 +272,7 @@ if __name__ == "__main__":
     elastic_port = 9200
     elasticsearch_index = args.dataset_name
     es = Elasticsearch(
-        [{"host": elastic_host, "port": elastic_port}],
+        [{"host": elastic_host, "port": elastic_port, "scheme": "http"}],
         max_retries=20,  # it's exp backoff starting 2, more than 2 retries will be too much.
         request_timeout=2000,
         retry_on_timeout=True,
