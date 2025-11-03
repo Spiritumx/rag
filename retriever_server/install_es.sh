@@ -1,20 +1,4 @@
 #!/bin/bash
-# git clone https://github.com/Spiritum-coder/graduateRAG.git
-# token ***REMOVED***
-
-
-
-sudo apt update && sudo apt install p7zip-full unzip -y
-
-cd download
-
-chmod +x extract_datasets.sh
-./extract_datasets.sh
-
-cd ..
-
-conda env update --file pixi_env.yaml
-
 # 安装并启动 Elasticsearch（无 Docker）
 # 1) 添加 Elastic APT 源与密钥
 sudo apt update && sudo apt install -y curl gnupg apt-transport-https ca-certificates
