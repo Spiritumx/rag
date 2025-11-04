@@ -83,10 +83,13 @@ def generate_splade_vector(text: str, model, tokenizer, device, max_length: int 
                     token = tokenizer.convert_ids_to_tokens([int(idx)])[0]
                     
                     # Filter out special tokens and invalid tokens
-                    if token and not token.startswith('[') and not token.startswith('<'):
+                    # rank_features doesn't support: [, <, ., and some other special chars
+                    if token and not token.startswith('[') and not token.startswith('<') and '.' not in token:
                         # Clean token: replace special chars that ES doesn't like
-                        token_clean = token.replace('#', '').replace('##', '')
-                        if token_clean:  # Make sure it's not empty after cleaning
+                        token_clean = token.replace('#', '').replace('##', '').replace('.', '').replace(',', '')
+                        # Remove any remaining special characters that could cause issues
+                        token_clean = ''.join(c for c in token_clean if c.isalnum() or c in ['_', '-'])
+                        if token_clean and len(token_clean) > 0:  # Make sure it's not empty after cleaning
                             sparse_dict[token_clean] = float(vec_cpu[idx])
             
             return sparse_dict if sparse_dict else None
