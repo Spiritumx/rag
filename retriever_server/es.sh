@@ -5,7 +5,7 @@ set -euo pipefail
 # 配置：全部使用仓库内目录与本地发行包，不使用 /usr /etc /var
 BASE_DIR="$(cd "$(dirname "$0")" && pwd)"
 ES_BASE="/root/autodl-tmp/es"
-ES_VERSION="8.15.2"
+ES_VERSION="8.15.5"
 DIST_DIR="$ES_BASE/es_dist"
 ES_HOME="$DIST_DIR/elasticsearch-$ES_VERSION"
 ES_BIN="$ES_HOME/bin/elasticsearch"

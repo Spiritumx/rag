@@ -1,5 +1,8 @@
 name: default
 channels:
+- https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main
+- https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/free
+- https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge
 - nvidia
 - pytorch
 - conda-forge
