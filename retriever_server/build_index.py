@@ -1,12 +1,11 @@
 """ 
-Build ES (Elasticsearch) BM25 Index.
+Build ES (Elasticsearch) Multi-Index (BM25 + HNSW + SPLADE).
 """
-from typing import Dict, Union
+from typing import Dict, Union, Optional, Any
 import json
 import argparse
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers import bulk
-from typing import Any
 import hashlib
 import io
 import dill
@@ -18,6 +17,8 @@ from bs4 import BeautifulSoup
 import os
 import random
 import csv
+import torch
+import numpy as np
 
 
 def hash_object(o: Any) -> str:
@@ -28,7 +29,75 @@ def hash_object(o: Any) -> str:
         return base58.b58encode(m.digest()).decode()
 
 
-def make_hotpotqa_documents(elasticsearch_index: str, metadata: Union[Dict[str, int], None] = None):
+def generate_dense_embedding(text: str, model, tokenizer, device, max_length: int = 512):
+    """Generate dense embeddings using sentence transformers or similar models."""
+    if model is None:
+        return None
+    
+    try:
+        # For sentence-transformers models
+        if hasattr(model, 'encode'):
+            embedding = model.encode(text, convert_to_numpy=True)
+            return embedding.tolist()
+        else:
+            # For HuggingFace transformers models
+            inputs = tokenizer(text, return_tensors='pt', max_length=max_length, 
+                             truncation=True, padding=True).to(device)
+            with torch.no_grad():
+                outputs = model(**inputs)
+                # Mean pooling
+                embeddings = outputs.last_hidden_state.mean(dim=1)
+                embeddings = embeddings.cpu().numpy()[0]
+            return embeddings.tolist()
+    except Exception as e:
+        print(f"Error generating dense embedding: {e}")
+        return None
+
+
+def generate_splade_vector(text: str, model, tokenizer, device, max_length: int = 512):
+    """Generate SPLADE sparse vectors."""
+    if model is None:
+        return None
+    
+    try:
+        inputs = tokenizer(text, return_tensors='pt', max_length=max_length, 
+                          truncation=True, padding=True).to(device)
+        with torch.no_grad():
+            outputs = model(**inputs)
+            # SPLADE uses log(1 + ReLU(logits)) and max pooling
+            logits = outputs.logits if hasattr(outputs, 'logits') else outputs[0]
+            vec = torch.log(1 + torch.relu(logits))
+            vec = torch.max(vec, dim=1).values.squeeze()
+            
+            # Convert to sparse representation (keep only non-zero values)
+            vec_cpu = vec.cpu().numpy()
+            # Keep top-k values to make it sparse (e.g., top 100-200 tokens)
+            top_k = 200
+            top_indices = np.argsort(vec_cpu)[-top_k:]
+            
+            # Create sparse dict: {token_id: weight}
+            sparse_dict = {}
+            for idx in top_indices:
+                if vec_cpu[idx] > 0:
+                    # Convert token_id to token string for ES rank_features
+                    token = tokenizer.convert_ids_to_tokens([idx])[0]
+                    sparse_dict[token] = float(vec_cpu[idx])
+            
+            return sparse_dict if sparse_dict else None
+    except Exception as e:
+        print(f"Error generating SPLADE vector: {e}")
+        return None
+
+
+def make_hotpotqa_documents(
+    elasticsearch_index: str, 
+    metadata: Union[Dict[str, int], None] = None,
+    dense_model=None,
+    dense_tokenizer=None,
+    splade_model=None,
+    splade_tokenizer=None,
+    device=None
+):
     raw_glob_filepath = os.path.join("/root/autodl-tmp/raw_data", "hotpotqa", "wikpedia-paragraphs", "*", "wiki_*.bz2")
     metadata = metadata or {"idx": 1}
     assert "idx" in metadata
@@ -52,6 +121,20 @@ def make_hotpotqa_documents(elasticsearch_index: str, metadata: Union[Dict[str, 
                 "url": url,
                 "is_abstract": is_abstract,
             }
+            
+            # Generate embeddings if models are provided
+            text_to_embed = f"{title} {paragraph_text}"
+            
+            if dense_model is not None:
+                dense_emb = generate_dense_embedding(text_to_embed, dense_model, dense_tokenizer, device)
+                if dense_emb is not None:
+                    es_paragraph["dense_embedding"] = dense_emb
+            
+            if splade_model is not None:
+                splade_vec = generate_splade_vector(text_to_embed, splade_model, splade_tokenizer, device)
+                if splade_vec is not None:
+                    es_paragraph["splade_vector"] = splade_vec
+            
             document = {
                 "_op_type": "create",
                 "_index": elasticsearch_index,
@@ -62,7 +145,15 @@ def make_hotpotqa_documents(elasticsearch_index: str, metadata: Union[Dict[str, 
             metadata["idx"] += 1
 
 
-def make_iirc_documents(elasticsearch_index: str, metadata: Union[Dict[str, int], None] = None):
+def make_iirc_documents(
+    elasticsearch_index: str, 
+    metadata: Union[Dict[str, int], None] = None,
+    dense_model=None,
+    dense_tokenizer=None,
+    splade_model=None,
+    splade_tokenizer=None,
+    device=None
+):
     raw_filepath = os.path.join("/root/autodl-tmp/raw_data", "iirc", "context_articles.json")
 
     metadata = metadata or {"idx": 1}
@@ -99,6 +190,20 @@ def make_iirc_documents(elasticsearch_index: str, metadata: Union[Dict[str, int]
                     "url": url,
                     "is_abstract": is_abstract,
                 }
+                
+                # Generate embeddings if models are provided
+                text_to_embed = f"{title} {paragraph_text}"
+                
+                if dense_model is not None:
+                    dense_emb = generate_dense_embedding(text_to_embed, dense_model, dense_tokenizer, device)
+                    if dense_emb is not None:
+                        es_paragraph["dense_embedding"] = dense_emb
+                
+                if splade_model is not None:
+                    splade_vec = generate_splade_vector(text_to_embed, splade_model, splade_tokenizer, device)
+                    if splade_vec is not None:
+                        es_paragraph["splade_vector"] = splade_vec
+                
                 document = {
                     "_op_type": "create",
                     "_index": elasticsearch_index,
@@ -109,7 +214,15 @@ def make_iirc_documents(elasticsearch_index: str, metadata: Union[Dict[str, int]
                 metadata["idx"] += 1
 
 
-def make_2wikimultihopqa_documents(elasticsearch_index: str, metadata: Union[Dict[str, int], None] = None):
+def make_2wikimultihopqa_documents(
+    elasticsearch_index: str, 
+    metadata: Union[Dict[str, int], None] = None,
+    dense_model=None,
+    dense_tokenizer=None,
+    splade_model=None,
+    splade_tokenizer=None,
+    device=None
+):
     raw_filepaths = [
         os.path.join("/root/autodl-tmp/raw_data", "2wikimultihopqa", "train.json"),
         os.path.join("/root/autodl-tmp/raw_data", "2wikimultihopqa", "dev.json"),
@@ -148,6 +261,20 @@ def make_2wikimultihopqa_documents(elasticsearch_index: str, metadata: Union[Dic
                         "url": url,
                         "is_abstract": is_abstract,
                     }
+                    
+                    # Generate embeddings if models are provided
+                    text_to_embed = f"{title} {paragraph_text}"
+                    
+                    if dense_model is not None:
+                        dense_emb = generate_dense_embedding(text_to_embed, dense_model, dense_tokenizer, device)
+                        if dense_emb is not None:
+                            es_paragraph["dense_embedding"] = dense_emb
+                    
+                    if splade_model is not None:
+                        splade_vec = generate_splade_vector(text_to_embed, splade_model, splade_tokenizer, device)
+                        if splade_vec is not None:
+                            es_paragraph["splade_vector"] = splade_vec
+                    
                     document = {
                         "_op_type": "create",
                         "_index": elasticsearch_index,
@@ -158,7 +285,15 @@ def make_2wikimultihopqa_documents(elasticsearch_index: str, metadata: Union[Dic
                     metadata["idx"] += 1
 
 
-def make_musique_documents(elasticsearch_index: str, metadata: Union[Dict[str, int], None] = None):
+def make_musique_documents(
+    elasticsearch_index: str, 
+    metadata: Union[Dict[str, int], None] = None,
+    dense_model=None,
+    dense_tokenizer=None,
+    splade_model=None,
+    splade_tokenizer=None,
+    device=None
+):
     raw_filepaths = [
         os.path.join("/root/autodl-tmp/raw_data", "musique", "musique_ans_v1.0_dev.jsonl"),
         os.path.join("/root/autodl-tmp/raw_data", "musique", "musique_ans_v1.0_test.jsonl"),
@@ -202,6 +337,20 @@ def make_musique_documents(elasticsearch_index: str, metadata: Union[Dict[str, i
                         "url": url,
                         "is_abstract": is_abstract,
                     }
+                    
+                    # Generate embeddings if models are provided
+                    text_to_embed = f"{title} {paragraph_text}"
+                    
+                    if dense_model is not None:
+                        dense_emb = generate_dense_embedding(text_to_embed, dense_model, dense_tokenizer, device)
+                        if dense_emb is not None:
+                            es_paragraph["dense_embedding"] = dense_emb
+                    
+                    if splade_model is not None:
+                        splade_vec = generate_splade_vector(text_to_embed, splade_model, splade_tokenizer, device)
+                        if splade_vec is not None:
+                            es_paragraph["splade_vector"] = splade_vec
+                    
                     document = {
                         "_op_type": "create",
                         "_index": elasticsearch_index,
@@ -211,7 +360,15 @@ def make_musique_documents(elasticsearch_index: str, metadata: Union[Dict[str, i
                     yield (document)
                     metadata["idx"] += 1
 
-def make_wiki_documents(elasticsearch_index: str, metadata: Union[Dict[str, int], None] = None):
+def make_wiki_documents(
+    elasticsearch_index: str, 
+    metadata: Union[Dict[str, int], None] = None,
+    dense_model=None,
+    dense_tokenizer=None,
+    splade_model=None,
+    splade_tokenizer=None,
+    device=None
+):
     raw_glob_filepath = os.path.join("/root/autodl-tmp/raw_data", "wiki", 'psgs_w100.tsv')
     metadata = metadata or {"idx": 1}
     assert "idx" in metadata
@@ -238,6 +395,20 @@ def make_wiki_documents(elasticsearch_index: str, metadata: Union[Dict[str, int]
                     "url": url,
                     "is_abstract": is_abstract,
                                 }
+            
+            # Generate embeddings if models are provided
+            text_to_embed = f"{title} {paragraph_text}"
+            
+            if dense_model is not None:
+                dense_emb = generate_dense_embedding(text_to_embed, dense_model, dense_tokenizer, device)
+                if dense_emb is not None:
+                    es_paragraph["dense_embedding"] = dense_emb
+            
+            if splade_model is not None:
+                splade_vec = generate_splade_vector(text_to_embed, splade_model, splade_tokenizer, device)
+                if splade_vec is not None:
+                    es_paragraph["splade_vector"] = splade_vec
+            
             document = {
                     "_op_type": "create",
                     "_index": elasticsearch_index,
@@ -252,7 +423,7 @@ def make_wiki_documents(elasticsearch_index: str, metadata: Union[Dict[str, int]
 
 if __name__ == "__main__":
 
-    parser = argparse.ArgumentParser(description="Index paragraphs in Elasticsearch")
+    parser = argparse.ArgumentParser(description="Index paragraphs in Elasticsearch with BM25, HNSW, and SPLADE")
     parser.add_argument(
         "dataset_name",
         help="name of the dataset",
@@ -265,7 +436,81 @@ if __name__ == "__main__":
         action="store_true",
         default=False,
     )
+    parser.add_argument(
+        "--use-dense",
+        help="Generate and index dense embeddings for HNSW search",
+        action="store_true",
+        default=False,
+    )
+    parser.add_argument(
+        "--dense-model",
+        help="Dense embedding model name (sentence-transformers or HuggingFace)",
+        type=str,
+        default="sentence-transformers/all-MiniLM-L6-v2",
+    )
+    parser.add_argument(
+        "--use-splade",
+        help="Generate and index SPLADE sparse vectors",
+        action="store_true",
+        default=False,
+    )
+    parser.add_argument(
+        "--splade-model",
+        help="SPLADE model name",
+        type=str,
+        default="naver/splade-cocondenser-ensembledistil",
+    )
+    parser.add_argument(
+        "--batch-size",
+        help="Batch size for embedding generation (future use)",
+        type=int,
+        default=1,
+    )
     args = parser.parse_args()
+
+    # Set up device
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    print(f"Using device: {device}")
+
+    # Load models based on arguments
+    dense_model = None
+    dense_tokenizer = None
+    splade_model = None
+    splade_tokenizer = None
+
+    if args.use_dense:
+        print(f"Loading dense embedding model: {args.dense_model}")
+        try:
+            # Try sentence-transformers first
+            from sentence_transformers import SentenceTransformer
+            dense_model = SentenceTransformer(args.dense_model)
+            dense_model = dense_model.to(device)
+            print(f"Dense model loaded successfully (dimension: {dense_model.get_sentence_embedding_dimension()})")
+        except Exception as e:
+            print(f"Failed to load as sentence-transformer, trying HuggingFace: {e}")
+            try:
+                from transformers import AutoModel, AutoTokenizer
+                dense_tokenizer = AutoTokenizer.from_pretrained(args.dense_model)
+                dense_model = AutoModel.from_pretrained(args.dense_model)
+                dense_model = dense_model.to(device)
+                dense_model.eval()
+                print(f"Dense model loaded successfully via HuggingFace")
+            except Exception as e2:
+                print(f"Failed to load dense model: {e2}")
+                args.use_dense = False
+
+    if args.use_splade:
+        print(f"Loading SPLADE model: {args.splade_model}")
+        try:
+            from transformers import AutoModelForMaskedLM, AutoTokenizer
+            splade_tokenizer = AutoTokenizer.from_pretrained(args.splade_model)
+            splade_model = AutoModelForMaskedLM.from_pretrained(args.splade_model)
+            splade_model = splade_model.to(device)
+            splade_model.eval()
+            print(f"SPLADE model loaded successfully")
+        except Exception as e:
+            print(f"Failed to load SPLADE model: {e}")
+            args.use_splade = False
 
     # conntect elastic-search
     elastic_host = "localhost"
@@ -278,6 +523,7 @@ if __name__ == "__main__":
         retry_on_timeout=True,
     )
 
+    # Base mappings (BM25)
     paragraphs_index_settings = {
         "mappings": {
             "properties": {
@@ -298,6 +544,34 @@ if __name__ == "__main__":
             }
         }
     }
+
+    # Add dense vector mapping if using dense embeddings (HNSW)
+    if args.use_dense:
+        if hasattr(dense_model, 'get_sentence_embedding_dimension'):
+            dense_dim = dense_model.get_sentence_embedding_dimension()
+        else:
+            # Default dimension for common models
+            dense_dim = 768
+        
+        paragraphs_index_settings["mappings"]["properties"]["dense_embedding"] = {
+            "type": "dense_vector",
+            "dims": dense_dim,
+            "index": True,
+            "similarity": "cosine",  # or "dot_product", "l2_norm"
+            "index_options": {
+                "type": "hnsw",
+                "m": 16,  # Number of connections per node
+                "ef_construction": 100  # Size of candidate list during construction
+            }
+        }
+        print(f"Added dense_embedding field with dimension {dense_dim} and HNSW index")
+
+    # Add SPLADE sparse vector mapping if using SPLADE
+    if args.use_splade:
+        paragraphs_index_settings["mappings"]["properties"]["splade_vector"] = {
+            "type": "rank_features"  # Suitable for sparse vectors with term:score pairs
+        }
+        print(f"Added splade_vector field with rank_features type")
 
     # Check if index exists - using try/except for compatibility
     try:
@@ -327,23 +601,34 @@ if __name__ == "__main__":
     es.indices.create(index=elasticsearch_index, mappings=paragraphs_index_settings["mappings"])
 
     if args.dataset_name == "hotpotqa":
-        make_documents = make_hotpotqa_documents
+        make_documents_func = make_hotpotqa_documents
     elif args.dataset_name == "iirc":
-        make_documents = make_iirc_documents
+        make_documents_func = make_iirc_documents
     elif args.dataset_name == "2wikimultihopqa":
-        make_documents = make_2wikimultihopqa_documents
+        make_documents_func = make_2wikimultihopqa_documents
     elif args.dataset_name == "musique":
-        make_documents = make_musique_documents
+        make_documents_func = make_musique_documents
     elif args.dataset_name == "wiki":
-        make_documents = make_wiki_documents 
+        make_documents_func = make_wiki_documents 
     else:
         raise Exception(f"Unknown dataset_name {args.dataset_name}")
 
     # Bulk-insert documents into index
     print("Inserting Paragraphs ...")
+    print(f"Using BM25: Yes")
+    print(f"Using Dense Embeddings (HNSW): {args.use_dense}")
+    print(f"Using SPLADE: {args.use_splade}")
+    
     result = bulk(
         es,
-        make_documents(elasticsearch_index),
+        make_documents_func(
+            elasticsearch_index,
+            dense_model=dense_model,
+            dense_tokenizer=dense_tokenizer,
+            splade_model=splade_model,
+            splade_tokenizer=splade_tokenizer,
+            device=device
+        ),
         raise_on_error=True,  # set to true o/w it'll fail silently and only show less docs.
         raise_on_exception=True,  # set to true o/w it'll fail silently and only show less docs.
         max_retries=2,  # it's exp backoff starting 2, more than 2 retries will be too much.
