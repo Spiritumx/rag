@@ -75,17 +75,25 @@ def generate_splade_vector(text: str, model, tokenizer, device, max_length: int 
             top_k = 200
             top_indices = np.argsort(vec_cpu)[-top_k:]
             
-            # Create sparse dict: {token_id: weight}
+            # Create sparse dict: {token: weight}
             sparse_dict = {}
             for idx in top_indices:
                 if vec_cpu[idx] > 0:
                     # Convert token_id to token string for ES rank_features
-                    token = tokenizer.convert_ids_to_tokens([idx])[0]
-                    sparse_dict[token] = float(vec_cpu[idx])
+                    token = tokenizer.convert_ids_to_tokens([int(idx)])[0]
+                    
+                    # Filter out special tokens and invalid tokens
+                    if token and not token.startswith('[') and not token.startswith('<'):
+                        # Clean token: replace special chars that ES doesn't like
+                        token_clean = token.replace('#', '').replace('##', '')
+                        if token_clean:  # Make sure it's not empty after cleaning
+                            sparse_dict[token_clean] = float(vec_cpu[idx])
             
             return sparse_dict if sparse_dict else None
     except Exception as e:
         print(f"Error generating SPLADE vector: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 
@@ -446,7 +454,7 @@ if __name__ == "__main__":
         "--dense-model",
         help="Dense embedding model name (sentence-transformers or HuggingFace)",
         type=str,
-        default="sentence-transformers/all-MiniLM-L6-v2",
+        default="all-MiniLM-L6-v2",
     )
     parser.add_argument(
         "--dense-model-path",
@@ -658,21 +666,45 @@ if __name__ == "__main__":
     print(f"Using Dense Embeddings (HNSW): {args.use_dense}")
     print(f"Using SPLADE: {args.use_splade}")
     
-    result = bulk(
-        es,
-        make_documents_func(
-            elasticsearch_index,
-            dense_model=dense_model,
-            dense_tokenizer=dense_tokenizer,
-            splade_model=splade_model,
-            splade_tokenizer=splade_tokenizer,
-            device=device
-        ),
-        raise_on_error=True,  # set to true o/w it'll fail silently and only show less docs.
-        raise_on_exception=True,  # set to true o/w it'll fail silently and only show less docs.
-        max_retries=2,  # it's exp backoff starting 2, more than 2 retries will be too much.
-        request_timeout=500,
-    )
-    es.indices.refresh(index=elasticsearch_index)  # actually updates the count.
-    document_count = result[0]
-    print(f"Index {elasticsearch_index} is ready. Added {document_count} documents.")
+    try:
+        result = bulk(
+            es,
+            make_documents_func(
+                elasticsearch_index,
+                dense_model=dense_model,
+                dense_tokenizer=dense_tokenizer,
+                splade_model=splade_model,
+                splade_tokenizer=splade_tokenizer,
+                device=device
+            ),
+            raise_on_error=True,
+            raise_on_exception=True,
+            max_retries=2,
+            request_timeout=500,
+        )
+        es.indices.refresh(index=elasticsearch_index)
+        document_count = result[0]
+        print(f"Index {elasticsearch_index} is ready. Added {document_count} documents.")
+    except Exception as e:
+        print("\n" + "="*80)
+        print("ERROR: Bulk indexing failed!")
+        print("="*80)
+        print(f"Error type: {type(e).__name__}")
+        print(f"Error message: {str(e)}")
+        
+        # Try to extract detailed error information
+        if hasattr(e, 'errors'):
+            print(f"\nNumber of failed documents: {len(e.errors)}")
+            print("\nFirst few errors:")
+            for i, error in enumerate(e.errors[:5]):  # Show first 5 errors
+                print(f"\n--- Error {i+1} ---")
+                print(json.dumps(error, indent=2))
+        
+        print("\n" + "="*80)
+        print("Possible causes:")
+        print("1. SPLADE vector format issue - rank_features expects dict with string keys")
+        print("2. Dense embedding dimension mismatch")
+        print("3. Missing or invalid field in some documents")
+        print("4. Memory or resource limits in Elasticsearch")
+        print("="*80)
+        raise

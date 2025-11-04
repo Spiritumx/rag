@@ -209,7 +209,7 @@ def main():
     parser.add_argument("--method", choices=["bm25", "hnsw", "splade", "hybrid", "all"], 
                        default="all", help="Query method to use")
     parser.add_argument("--top-k", type=int, default=10, help="Number of results to return")
-    parser.add_argument("--dense-model", default="sentence-transformers/all-MiniLM-L6-v2",
+    parser.add_argument("--dense-model", default="all-MiniLM-L6-v2",
                        help="Dense embedding model or path to local model")
     parser.add_argument("--splade-model", default="naver/splade-v3",
                        help="SPLADE model or path to local model")

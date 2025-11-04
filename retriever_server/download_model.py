@@ -107,7 +107,7 @@ Examples:
     parser.add_argument(
         "--dense-model",
         type=str,
-        default="sentence-transformers/all-MiniLM-L6-v2",
+        default="all-MiniLM-L6-v2",
         help="Dense embedding model to download (default: all-MiniLM-L6-v2)"
     )
     parser.add_argument(
