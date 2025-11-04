@@ -6,6 +6,7 @@ import argparse
 from pathlib import Path
 import huggingface_hub
 
+token = "***REMOVED***"
 
 def download_sentence_transformer(model_name: str, save_dir: str):
     """Download sentence-transformers model"""
@@ -19,7 +20,7 @@ def download_sentence_transformer(model_name: str, save_dir: str):
         os.makedirs(os.path.dirname(local_path), exist_ok=True)
         
         print(f"   Loading model from HuggingFace...")
-        model = SentenceTransformer(model_name)
+        model = SentenceTransformer(model_name, token=token)
         
         print(f"   Saving to local directory...")
         model.save(local_path)
@@ -51,11 +52,11 @@ def download_transformers_model(model_name: str, save_dir: str, model_type: str 
         os.makedirs(os.path.dirname(local_path), exist_ok=True)
         
         print(f"   Downloading tokenizer...")
-        tokenizer = AutoTokenizer.from_pretrained(model_name)
+        tokenizer = AutoTokenizer.from_pretrained(model_name, token=token)
         tokenizer.save_pretrained(local_path)
         
         print(f"   Downloading model weights...")
-        model = AutoModelForMaskedLM.from_pretrained(model_name)
+        model = AutoModelForMaskedLM.from_pretrained(model_name, token=token)
         model.save_pretrained(local_path)
         
         # Test loading from local path
@@ -112,8 +113,8 @@ Examples:
     parser.add_argument(
         "--splade-model",
         type=str,
-        default="naver/splade-cocondenser-ensembledistil",
-        help="SPLADE model to download (default: splade-cocondenser-ensembledistil)"
+        default="naver/splade-v3",
+        help="SPLADE model to download (default: splade-v3)"
     )
     parser.add_argument(
         "--download-dense",

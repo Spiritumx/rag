@@ -464,7 +464,7 @@ if __name__ == "__main__":
         "--splade-model",
         help="SPLADE model name",
         type=str,
-        default="naver/splade-cocondenser-ensembledistil",
+        default="naver/splade-v3",
     )
     parser.add_argument(
         "--splade-model-path",
@@ -496,7 +496,7 @@ if __name__ == "__main__":
             print(f"📁 Found local dense model: {local_dense_path}")
     
     if args.use_splade and not args.splade_model_path:
-        local_splade_path = os.path.join(local_model_dir, "splade", "splade-cocondenser-ensembledistil")
+        local_splade_path = os.path.join(local_model_dir, "splade", "splade-v3")
         if os.path.exists(local_splade_path):
             args.splade_model_path = local_splade_path
             print(f"📁 Found local SPLADE model: {local_splade_path}")
