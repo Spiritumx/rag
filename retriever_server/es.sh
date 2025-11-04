@@ -39,7 +39,7 @@ cmd_install() {
 
   if [ ! -x "$ES_BIN" ]; then
     # 从 /autodl-fs 获取压缩包，而不是下载
-    AUTODL_FS_PATH="/autodl-fs/$TGZ"
+    AUTODL_FS_PATH="/root/autodl-fs/$TGZ"
     
     if [ -f "$AUTODL_FS_PATH" ]; then
       echo "Found Elasticsearch $ES_VERSION in /autodl-fs, copying..."

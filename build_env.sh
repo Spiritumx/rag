@@ -1,4 +1,6 @@
 #!/bin/bash
+# git config --global credential.helper store
+
 # git clone https://github.com/Spiritum-coder/graduateRAG.git
 # token ***REMOVED***
 

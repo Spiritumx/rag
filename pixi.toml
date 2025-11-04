@@ -1,15 +1,12 @@
 [workspace]
 channels = [
-    "https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/main/",
-    "https://mirrors.tuna.tsinghua.edu.cn/anaconda/pkgs/free/",
-    "https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/",
     "nvidia",
     "pytorch",
     "conda-forge"
     ]
 
 name = "graduateRAG"
-platforms = ["win-64"]
+platforms = ["win-64", "linux-64"]
 version = "0.1.0"
 [pypi-options]
 index-url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple"
@@ -21,7 +18,6 @@ extra-index-urls = ["https://mirrors.aliyun.com/pypi/simple/"]
 cuda = "12.8"
 
 [dependencies]
-python = "3.12.*"
 pytorch = "*"
 torchvision = "*"
 transformers = "*"
