@@ -38,8 +38,22 @@ cmd_install() {
   ensure_dirs
 
   if [ ! -x "$ES_BIN" ]; then
-    echo "Downloading Elasticsearch $ES_VERSION ..."
-    curl -fSL "$URL" -o "$DIST_DIR/$TGZ"
+    # 从 /autodl-fs 获取压缩包，而不是下载
+    AUTODL_FS_PATH="/autodl-fs/$TGZ"
+    
+    if [ -f "$AUTODL_FS_PATH" ]; then
+      echo "Found Elasticsearch $ES_VERSION in /autodl-fs, copying..."
+      cp "$AUTODL_FS_PATH" "$DIST_DIR/$TGZ"
+    elif [ -f "$DIST_DIR/$TGZ" ]; then
+      echo "Using existing tarball in $DIST_DIR/$TGZ"
+    else
+      echo "Error: $TGZ not found in /autodl-fs or $DIST_DIR" >&2
+      echo "Please download it manually or place it in /autodl-fs/" >&2
+      echo "Download URL: $URL" >&2
+      exit 1
+    fi
+    
+    echo "Extracting Elasticsearch $ES_VERSION ..."
     tar -xzf "$DIST_DIR/$TGZ" -C "$DIST_DIR"
     # 确保二进制可执行
     chmod +x "$ES_HOME/bin/"* 2>/dev/null || true
