@@ -4,6 +4,7 @@ Download models to local directory for offline use.
 import os
 import argparse
 from pathlib import Path
+import huggingface_hub
 
 
 def download_sentence_transformer(model_name: str, save_dir: str):
@@ -73,6 +74,7 @@ def download_transformers_model(model_name: str, save_dir: str, model_type: str 
 
 
 def main():
+    huggingface_hub.login(token="***REMOVED***")
     # Get script directory
     script_dir = os.path.dirname(os.path.abspath(__file__))
     default_model_dir = os.path.join(script_dir, "models")
