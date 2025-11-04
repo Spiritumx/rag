@@ -458,7 +458,7 @@ if __name__ == "__main__":
         "--splade-model",
         help="SPLADE model name",
         type=str,
-        default="naver/splade-cocondenser-ensembledistil",
+        default="naver/splade-v3",
     )
     parser.add_argument(
         "--batch-size",
