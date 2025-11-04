@@ -449,6 +449,12 @@ if __name__ == "__main__":
         default="sentence-transformers/all-MiniLM-L6-v2",
     )
     parser.add_argument(
+        "--dense-model-path",
+        help="Path to local dense model directory (overrides --dense-model)",
+        type=str,
+        default=None,
+    )
+    parser.add_argument(
         "--use-splade",
         help="Generate and index SPLADE sparse vectors",
         action="store_true",
@@ -459,6 +465,12 @@ if __name__ == "__main__":
         help="SPLADE model name",
         type=str,
         default="naver/splade-cocondenser-ensembledistil",
+    )
+    parser.add_argument(
+        "--splade-model-path",
+        help="Path to local SPLADE model directory (overrides --splade-model)",
+        type=str,
+        default=None,
     )
     parser.add_argument(
         "--batch-size",
@@ -472,6 +484,23 @@ if __name__ == "__main__":
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"Using device: {device}")
 
+    # Auto-detect local models in retriever_server/models directory
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    local_model_dir = os.path.join(script_dir, "models")
+    
+    # If no path specified, check local directory for models
+    if args.use_dense and not args.dense_model_path:
+        local_dense_path = os.path.join(local_model_dir, "dense", "all-MiniLM-L6-v2")
+        if os.path.exists(local_dense_path):
+            args.dense_model_path = local_dense_path
+            print(f"📁 Found local dense model: {local_dense_path}")
+    
+    if args.use_splade and not args.splade_model_path:
+        local_splade_path = os.path.join(local_model_dir, "splade", "splade-cocondenser-ensembledistil")
+        if os.path.exists(local_splade_path):
+            args.splade_model_path = local_splade_path
+            print(f"📁 Found local SPLADE model: {local_splade_path}")
+
     # Load models based on arguments
     dense_model = None
     dense_tokenizer = None
@@ -479,37 +508,47 @@ if __name__ == "__main__":
     splade_tokenizer = None
 
     if args.use_dense:
-        print(f"Loading dense embedding model: {args.dense_model}")
+        # Use local path if provided, otherwise use model name
+        model_source = args.dense_model_path if args.dense_model_path else args.dense_model
+        print(f"Loading dense embedding model: {model_source}")
+        if args.dense_model_path:
+            print(f"  ✓ Using local model")
+        
         try:
             # Try sentence-transformers first
             from sentence_transformers import SentenceTransformer
-            dense_model = SentenceTransformer(args.dense_model)
+            dense_model = SentenceTransformer(model_source)
             dense_model = dense_model.to(device)
-            print(f"Dense model loaded successfully (dimension: {dense_model.get_sentence_embedding_dimension()})")
+            print(f"✓ Dense model loaded successfully (dimension: {dense_model.get_sentence_embedding_dimension()})")
         except Exception as e:
             print(f"Failed to load as sentence-transformer, trying HuggingFace: {e}")
             try:
                 from transformers import AutoModel, AutoTokenizer
-                dense_tokenizer = AutoTokenizer.from_pretrained(args.dense_model)
-                dense_model = AutoModel.from_pretrained(args.dense_model)
+                dense_tokenizer = AutoTokenizer.from_pretrained(model_source)
+                dense_model = AutoModel.from_pretrained(model_source)
                 dense_model = dense_model.to(device)
                 dense_model.eval()
-                print(f"Dense model loaded successfully via HuggingFace")
+                print(f"✓ Dense model loaded successfully via HuggingFace")
             except Exception as e2:
-                print(f"Failed to load dense model: {e2}")
+                print(f"✗ Failed to load dense model: {e2}")
                 args.use_dense = False
 
     if args.use_splade:
-        print(f"Loading SPLADE model: {args.splade_model}")
+        # Use local path if provided, otherwise use model name
+        model_source = args.splade_model_path if args.splade_model_path else args.splade_model
+        print(f"Loading SPLADE model: {model_source}")
+        if args.splade_model_path:
+            print(f"  ✓ Using local model")
+        
         try:
             from transformers import AutoModelForMaskedLM, AutoTokenizer
-            splade_tokenizer = AutoTokenizer.from_pretrained(args.splade_model)
-            splade_model = AutoModelForMaskedLM.from_pretrained(args.splade_model)
+            splade_tokenizer = AutoTokenizer.from_pretrained(model_source)
+            splade_model = AutoModelForMaskedLM.from_pretrained(model_source)
             splade_model = splade_model.to(device)
             splade_model.eval()
-            print(f"SPLADE model loaded successfully")
+            print(f"✓ SPLADE model loaded successfully")
         except Exception as e:
-            print(f"Failed to load SPLADE model: {e}")
+            print(f"✗ Failed to load SPLADE model: {e}")
             args.use_splade = False
 
     # conntect elastic-search
