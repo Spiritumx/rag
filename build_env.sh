@@ -4,7 +4,7 @@
 
 
 
-sudo apt update && sudo apt install p7zip-full unzip -y
+apt update && apt install p7zip-full unzip -y
 
 cd download
 
@@ -15,8 +15,8 @@ cd ..
 
 conda env update --file pixi_env.yaml
 
-chmod +x retriever_serve/es.sh
+chmod +x retriever_server/es.sh
 
-./es.sh install
+./retriever_server/es.sh install
 
-./es.sh start
+./retriever_server/es.sh start
