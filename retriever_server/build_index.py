@@ -453,21 +453,57 @@ def make_wiki_documents(
     splade_model=None,
     splade_tokenizer=None,
     device=None,
-    batch_size: int = 32
+    batch_size: int = 32,
+    checkpoint_file: str = None,
+    checkpoint_interval: int = 1000
 ):
     raw_glob_filepath = os.path.join("/root/autodl-tmp/raw_data", "wiki", 'psgs_w100.tsv')
     metadata = metadata or {"idx": 1}
     assert "idx" in metadata
-
+    
+    # Load checkpoint if exists
+    start_line = 0
+    if checkpoint_file and os.path.exists(checkpoint_file):
+        try:
+            with open(checkpoint_file, 'r') as f:
+                checkpoint_data = json.load(f)
+                start_line = checkpoint_data.get('line_number', 0)
+                metadata["idx"] = checkpoint_data.get('doc_idx', 1)
+                print(f"📍 Resuming from checkpoint: line {start_line}, doc_idx {metadata['idx']}")
+        except Exception as e:
+            print(f"⚠️  Failed to load checkpoint: {e}, starting from beginning")
+            start_line = 0
+    
+    # Get total line count for progress tracking
+    total_lines = 0
+    with open(raw_glob_filepath) as f:
+        total_lines = sum(1 for _ in f) - 1  # Subtract header line
+    print(f"📊 Total documents in dataset: {total_lines:,}")
+    
     with open(raw_glob_filepath) as input_file:
         tr = csv.reader(input_file, delimiter='\t')
-        next(tr)
+        next(tr)  # Skip header
+        
+        # Skip already processed lines
+        current_line = 0
+        if start_line > 0:
+            print(f"⏭️  Skipping first {start_line:,} lines...")
+            for _ in range(start_line):
+                try:
+                    next(tr)
+                    current_line += 1
+                except StopIteration:
+                    break
         
         # Batch processing
         batch_data = []
         batch_texts = []
+        processed_count = 0
         
-        for line in tqdm(tr):
+        for line in tqdm(tr, initial=start_line, total=total_lines, desc="Processing wiki docs"):
+            current_line += 1
+            processed_count += 1
+            
             paragraph_text = line[1]
             title = line[2]
             url = ""
@@ -518,6 +554,19 @@ def make_wiki_documents(
                 # Clear batch
                 batch_data = []
                 batch_texts = []
+                
+                # Save checkpoint periodically
+                if checkpoint_file and processed_count % checkpoint_interval == 0:
+                    checkpoint_data = {
+                        'line_number': start_line + processed_count,
+                        'doc_idx': metadata["idx"],
+                        'total_processed': start_line + processed_count
+                    }
+                    try:
+                        with open(checkpoint_file, 'w') as f:
+                            json.dump(checkpoint_data, f)
+                    except Exception as e:
+                        print(f"⚠️  Failed to save checkpoint: {e}")
         
         # Process remaining batch
         if batch_data:
@@ -542,6 +591,14 @@ def make_wiki_documents(
                 }
                 yield document
                 metadata["idx"] += 1
+        
+        # Delete checkpoint file on successful completion
+        if checkpoint_file and os.path.exists(checkpoint_file):
+            try:
+                os.remove(checkpoint_file)
+                print(f"✅ Checkpoint file removed after successful completion")
+            except Exception as e:
+                print(f"⚠️  Failed to remove checkpoint file: {e}")
 
 
 
@@ -608,6 +665,18 @@ if __name__ == "__main__":
         help="Elasticsearch bulk chunk size (documents per batch)",
         type=int,
         default=2000,
+    )
+    parser.add_argument(
+        "--enable-checkpoint",
+        help="Enable checkpoint for resuming interrupted indexing (wiki dataset only)",
+        action="store_true",
+        default=False,
+    )
+    parser.add_argument(
+        "--checkpoint-interval",
+        help="Save checkpoint every N documents",
+        type=int,
+        default=1000,
     )
     args = parser.parse_args()
 
@@ -743,6 +812,14 @@ if __name__ == "__main__":
         }
         print(f"Added splade_vector field with rank_features type")
 
+    # Check if checkpoint exists for wiki dataset
+    checkpoint_exists = False
+    checkpoint_file = None
+    if args.dataset_name == "wiki" and args.enable_checkpoint:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        checkpoint_file = os.path.join(script_dir, f".checkpoint_wiki_{elasticsearch_index}.json")
+        checkpoint_exists = os.path.exists(checkpoint_file)
+    
     # Check if index exists - using try/except for compatibility
     try:
         index_exists = es.indices.exists(index=elasticsearch_index)
@@ -756,19 +833,28 @@ if __name__ == "__main__":
             index_exists = False
     
     print("Index already exists" if index_exists else "Index doesn't exist.")
+    
+    # Handle checkpoint resume scenario
+    if checkpoint_exists:
+        print(f"📍 Found checkpoint file - resuming from previous run")
+        if not index_exists:
+            print("⚠️  Warning: Checkpoint exists but index was deleted. Creating new index...")
+            es.indices.create(index=elasticsearch_index, mappings=paragraphs_index_settings["mappings"])
+        else:
+            print(f"✓ Using existing index: {elasticsearch_index}")
+    else:
+        # delete index if exists (normal flow)
+        if index_exists:
+            if not args.force:
+                feedback = input(f"Index {elasticsearch_index} already exists. " f"Are you sure you want to delete it? (y/n): ")
+                if not (feedback.startswith("y") or feedback == ""):
+                    exit("Terminated by user.")
+            es.indices.delete(index=elasticsearch_index)
+            print("Index deleted.")
 
-    # delete index if exists
-    if index_exists:
-
-        if not args.force:
-            feedback = input(f"Index {elasticsearch_index} already exists. " f"Are you sure you want to delete it?")
-            if not (feedback.startswith("y") or feedback == ""):
-                exit("Termited by user.")
-        es.indices.delete(index=elasticsearch_index)
-
-    # create index
-    print("Creating Index ...")
-    es.indices.create(index=elasticsearch_index, mappings=paragraphs_index_settings["mappings"])
+        # create index
+        print("Creating Index ...")
+        es.indices.create(index=elasticsearch_index, mappings=paragraphs_index_settings["mappings"])
 
     if args.dataset_name == "hotpotqa":
         make_documents_func = make_hotpotqa_documents
@@ -800,9 +886,17 @@ if __name__ == "__main__":
         "device": device
     }
     
-    # Add batch_size for wiki dataset
+    # Add batch_size and checkpoint support for wiki dataset
     if args.dataset_name == "wiki":
         doc_kwargs["batch_size"] = args.batch_size
+        if args.enable_checkpoint:
+            # Create checkpoint file path
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            checkpoint_file = os.path.join(script_dir, f".checkpoint_wiki_{elasticsearch_index}.json")
+            doc_kwargs["checkpoint_file"] = checkpoint_file
+            doc_kwargs["checkpoint_interval"] = args.checkpoint_interval
+            print(f"💾 Checkpoint enabled: {checkpoint_file}")
+            print(f"   Checkpoint interval: every {args.checkpoint_interval} documents")
     
     try:
         result = bulk(
@@ -816,7 +910,20 @@ if __name__ == "__main__":
         )
         es.indices.refresh(index=elasticsearch_index)
         document_count = result[0]
-        print(f"Index {elasticsearch_index} is ready. Added {document_count} documents.")
+        
+        # Get total document count in index
+        try:
+            total_docs = es.count(index=elasticsearch_index)['count']
+            print(f"\n{'='*60}")
+            print(f"✅ Indexing completed successfully!")
+            print(f"{'='*60}")
+            print(f"📊 Statistics:")
+            print(f"   - Documents added in this run: {document_count:,}")
+            print(f"   - Total documents in index: {total_docs:,}")
+            print(f"   - Index name: {elasticsearch_index}")
+            print(f"{'='*60}")
+        except:
+            print(f"\n✅ Index {elasticsearch_index} is ready. Added {document_count:,} documents.")
     except Exception as e:
         print("\n" + "="*80)
         print("ERROR: Bulk indexing failed!")
