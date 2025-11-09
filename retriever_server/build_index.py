@@ -54,6 +54,35 @@ def generate_dense_embedding(text: str, model, tokenizer, device, max_length: in
         return None
 
 
+def generate_dense_embeddings_batch(texts: list, model, tokenizer, device, max_length: int = 512, batch_size: int = 32):
+    """Generate dense embeddings for a batch of texts."""
+    if model is None or not texts:
+        return [None] * len(texts)
+    
+    try:
+        # For sentence-transformers models
+        if hasattr(model, 'encode'):
+            embeddings = model.encode(texts, convert_to_numpy=True, batch_size=batch_size, show_progress_bar=False)
+            return [emb.tolist() for emb in embeddings]
+        else:
+            # For HuggingFace transformers models - process in batches
+            all_embeddings = []
+            for i in range(0, len(texts), batch_size):
+                batch_texts = texts[i:i + batch_size]
+                inputs = tokenizer(batch_texts, return_tensors='pt', max_length=max_length, 
+                                 truncation=True, padding=True).to(device)
+                with torch.no_grad():
+                    outputs = model(**inputs)
+                    # Mean pooling
+                    embeddings = outputs.last_hidden_state.mean(dim=1)
+                    embeddings = embeddings.cpu().numpy()
+                all_embeddings.extend([emb.tolist() for emb in embeddings])
+            return all_embeddings
+    except Exception as e:
+        print(f"Error generating dense embeddings batch: {e}")
+        return [None] * len(texts)
+
+
 def generate_splade_vector(text: str, model, tokenizer, device, max_length: int = 512):
     """Generate SPLADE sparse vectors."""
     if model is None:
@@ -98,6 +127,51 @@ def generate_splade_vector(text: str, model, tokenizer, device, max_length: int 
         import traceback
         traceback.print_exc()
         return None
+
+
+def generate_splade_vectors_batch(texts: list, model, tokenizer, device, max_length: int = 512, batch_size: int = 32):
+    """Generate SPLADE sparse vectors for a batch of texts."""
+    if model is None or not texts:
+        return [None] * len(texts)
+    
+    try:
+        all_sparse_dicts = []
+        for i in range(0, len(texts), batch_size):
+            batch_texts = texts[i:i + batch_size]
+            inputs = tokenizer(batch_texts, return_tensors='pt', max_length=max_length, 
+                              truncation=True, padding=True).to(device)
+            with torch.no_grad():
+                outputs = model(**inputs)
+                # SPLADE uses log(1 + ReLU(logits)) and max pooling
+                logits = outputs.logits if hasattr(outputs, 'logits') else outputs[0]
+                vecs = torch.log(1 + torch.relu(logits))
+                vecs = torch.max(vecs, dim=1).values  # [batch_size, vocab_size]
+                
+                vecs_cpu = vecs.cpu().numpy()
+                
+                # Process each vector in the batch
+                for vec_cpu in vecs_cpu:
+                    top_k = 200
+                    top_indices = np.argsort(vec_cpu)[-top_k:]
+                    
+                    sparse_dict = {}
+                    for idx in top_indices:
+                        if vec_cpu[idx] > 0:
+                            token = tokenizer.convert_ids_to_tokens([int(idx)])[0]
+                            if token and not token.startswith('[') and not token.startswith('<') and '.' not in token:
+                                token_clean = token.replace('#', '').replace('##', '').replace('.', '').replace(',', '')
+                                token_clean = ''.join(c for c in token_clean if c.isalnum() or c in ['_', '-'])
+                                if token_clean and len(token_clean) > 0:
+                                    sparse_dict[token_clean] = float(vec_cpu[idx])
+                    
+                    all_sparse_dicts.append(sparse_dict if sparse_dict else None)
+        
+        return all_sparse_dicts
+    except Exception as e:
+        print(f"Error generating SPLADE vectors batch: {e}")
+        import traceback
+        traceback.print_exc()
+        return [None] * len(texts)
 
 
 def make_hotpotqa_documents(
@@ -378,7 +452,8 @@ def make_wiki_documents(
     dense_tokenizer=None,
     splade_model=None,
     splade_tokenizer=None,
-    device=None
+    device=None,
+    batch_size: int = 32
 ):
     raw_glob_filepath = os.path.join("/root/autodl-tmp/raw_data", "wiki", 'psgs_w100.tsv')
     metadata = metadata or {"idx": 1}
@@ -387,9 +462,12 @@ def make_wiki_documents(
     with open(raw_glob_filepath) as input_file:
         tr = csv.reader(input_file, delimiter='\t')
         next(tr)
+        
+        # Batch processing
+        batch_data = []
+        batch_texts = []
+        
         for line in tqdm(tr):
-            #import pdb; pdb.set_trace()
-            #dict_line['_id'] = line[0]
             paragraph_text = line[1]
             title = line[2]
             url = ""
@@ -399,35 +477,71 @@ def make_wiki_documents(
             is_abstract = True
 
             es_paragraph = {
-                    "id": id_,
-                    "title": title,
-                    "paragraph_index": paragraph_index,
-                    "paragraph_text": paragraph_text,
-                    "url": url,
-                    "is_abstract": is_abstract,
-                                }
+                "id": id_,
+                "title": title,
+                "paragraph_index": paragraph_index,
+                "paragraph_text": paragraph_text,
+                "url": url,
+                "is_abstract": is_abstract,
+            }
             
-            # Generate embeddings if models are provided
             text_to_embed = f"{title} {paragraph_text}"
+            batch_data.append(es_paragraph)
+            batch_texts.append(text_to_embed)
             
+            # Process batch when it reaches batch_size
+            if len(batch_data) >= batch_size:
+                # Generate embeddings in batch
+                if dense_model is not None:
+                    dense_embs = generate_dense_embeddings_batch(batch_texts, dense_model, dense_tokenizer, device, batch_size=batch_size)
+                    for i, dense_emb in enumerate(dense_embs):
+                        if dense_emb is not None:
+                            batch_data[i]["dense_embedding"] = dense_emb
+                
+                if splade_model is not None:
+                    splade_vecs = generate_splade_vectors_batch(batch_texts, splade_model, splade_tokenizer, device, batch_size=batch_size)
+                    for i, splade_vec in enumerate(splade_vecs):
+                        if splade_vec is not None:
+                            batch_data[i]["splade_vector"] = splade_vec
+                
+                # Yield documents
+                for es_paragraph in batch_data:
+                    document = {
+                        "_op_type": "create",
+                        "_index": elasticsearch_index,
+                        "_id": metadata["idx"],
+                        "_source": es_paragraph,
+                    }
+                    yield document
+                    metadata["idx"] += 1
+                
+                # Clear batch
+                batch_data = []
+                batch_texts = []
+        
+        # Process remaining batch
+        if batch_data:
             if dense_model is not None:
-                dense_emb = generate_dense_embedding(text_to_embed, dense_model, dense_tokenizer, device)
-                if dense_emb is not None:
-                    es_paragraph["dense_embedding"] = dense_emb
+                dense_embs = generate_dense_embeddings_batch(batch_texts, dense_model, dense_tokenizer, device, batch_size=batch_size)
+                for i, dense_emb in enumerate(dense_embs):
+                    if dense_emb is not None:
+                        batch_data[i]["dense_embedding"] = dense_emb
             
             if splade_model is not None:
-                splade_vec = generate_splade_vector(text_to_embed, splade_model, splade_tokenizer, device)
-                if splade_vec is not None:
-                    es_paragraph["splade_vector"] = splade_vec
+                splade_vecs = generate_splade_vectors_batch(batch_texts, splade_model, splade_tokenizer, device, batch_size=batch_size)
+                for i, splade_vec in enumerate(splade_vecs):
+                    if splade_vec is not None:
+                        batch_data[i]["splade_vector"] = splade_vec
             
-            document = {
+            for es_paragraph in batch_data:
+                document = {
                     "_op_type": "create",
                     "_index": elasticsearch_index,
                     "_id": metadata["idx"],
                     "_source": es_paragraph,
-                    }
-            yield (document)
-            metadata["idx"] += 1
+                }
+                yield document
+                metadata["idx"] += 1
 
 
 
@@ -485,9 +599,15 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--batch-size",
-        help="Batch size for embedding generation (future use)",
+        help="Batch size for embedding generation",
         type=int,
-        default=1,
+        default=32,
+    )
+    parser.add_argument(
+        "--es-chunk-size",
+        help="Elasticsearch bulk chunk size (documents per batch)",
+        type=int,
+        default=2000,
     )
     args = parser.parse_args()
 
@@ -668,18 +788,27 @@ if __name__ == "__main__":
     print(f"Using BM25: Yes")
     print(f"Using Dense Embeddings (HNSW): {args.use_dense}")
     print(f"Using SPLADE: {args.use_splade}")
+    print(f"Batch size for embeddings: {args.batch_size}")
+    print(f"ES bulk chunk size: {args.es_chunk_size}")
+    
+    # Prepare kwargs for make_documents_func
+    doc_kwargs = {
+        "dense_model": dense_model,
+        "dense_tokenizer": dense_tokenizer,
+        "splade_model": splade_model,
+        "splade_tokenizer": splade_tokenizer,
+        "device": device
+    }
+    
+    # Add batch_size for wiki dataset
+    if args.dataset_name == "wiki":
+        doc_kwargs["batch_size"] = args.batch_size
     
     try:
         result = bulk(
             es,
-            make_documents_func(
-                elasticsearch_index,
-                dense_model=dense_model,
-                dense_tokenizer=dense_tokenizer,
-                splade_model=splade_model,
-                splade_tokenizer=splade_tokenizer,
-                device=device
-            ),
+            make_documents_func(elasticsearch_index, **doc_kwargs),
+            chunk_size=args.es_chunk_size,
             raise_on_error=True,
             raise_on_exception=True,
             max_retries=2,
