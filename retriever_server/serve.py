@@ -2,7 +2,7 @@ from time import perf_counter
 from fastapi import FastAPI, Request
 import os
 from pathlib import Path
-from typing import Tuple, Optional, Dict
+from typing import Tuple, Optional, Dict, Iterable
 
 from unified_retriever import UnifiedRetriever
 
@@ -47,20 +47,31 @@ def _load_reranker(model_source: Optional[str], device: Optional[str]) -> Option
 
 
 def _default_model_path(*parts) -> Optional[str]:
-    candidate = Path(__file__).resolve().parent.joinpath("models", *parts)
-    if candidate.exists():
-        return str(candidate)
+    base_dir = Path(__file__).resolve().parent
+    for folder_name in ("models", "model"):
+        candidate = base_dir.joinpath(folder_name, *parts)
+        if candidate.exists():
+            return str(candidate)
     return None
 
 
-def _resolve_model_source(env_path_key: str, env_name_key: str, default_subdir: Tuple[str, ...], default_name: str) -> Optional[str]:
+def _resolve_model_source(
+    env_path_key: str,
+    env_name_key: str,
+    default_subdir: Tuple[str, ...],
+    default_name: str,
+    alternate_names: Iterable[str] = (),
+) -> Optional[str]:
     if os.environ.get(env_path_key):
         return os.environ[env_path_key]
     if os.environ.get(env_name_key):
         return os.environ[env_name_key]
-    local_path = _default_model_path(*default_subdir, default_name)
-    if local_path:
-        return local_path
+    for name in (default_name, *alternate_names):
+        if not name:
+            continue
+        local_path = _default_model_path(*default_subdir, name)
+        if local_path:
+            return local_path
     return None
 
 
@@ -98,6 +109,7 @@ reranker_source = _resolve_model_source(
     env_name_key="RETRIEVER_RERANKER_MODEL_NAME",
     default_subdir=("reranker",),
     default_name="cross-encoder-ms-marco-MiniLM-L-6-v2",
+    alternate_names=("ms-marco-MiniLM-L6-v2",),
 )
 
 dense_model = None

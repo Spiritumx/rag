@@ -2,6 +2,7 @@ from typing import List, Dict, Optional
 import argparse
 
 from collections import OrderedDict
+from urllib.parse import urlparse
 from elasticsearch import Elasticsearch
 
 import numpy as np
@@ -32,12 +33,24 @@ class ElasticsearchRetriever:
         reranker=None,
         rerank_top_k: int = 50,
     ):
-        self._es = Elasticsearch([host], scheme="http", port=port, timeout=30)
+        self._es = self._build_client(host, port)
         self.dense_model = dense_model
         self.dense_tokenizer = dense_tokenizer
         self.splade_model = splade_model
         self.splade_tokenizer = splade_tokenizer
         self.device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
+    def _build_client(self, host: str, port: int) -> Elasticsearch:
+        parsed = urlparse(host)
+        if parsed.scheme:
+            connection = {
+                "host": parsed.hostname or "localhost",
+                "port": parsed.port or port,
+                "scheme": parsed.scheme,
+            }
+        else:
+            connection = {"host": host, "port": port, "scheme": "http"}
+
+        return Elasticsearch(hosts=[connection], request_timeout=30)
         self.hybrid_weights = hybrid_weights or {"bm25": 1.0, "dense": 1.0, "splade": 1.0}
         self.reranker = reranker
         self.rerank_top_k = max(1, rerank_top_k)
