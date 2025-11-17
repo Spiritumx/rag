@@ -1,5 +1,5 @@
 from time import perf_counter
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 import os
 from pathlib import Path
 from typing import Tuple, Optional, Dict, Iterable
@@ -165,28 +165,52 @@ async def index():
 
 
 @app.post("/retrieve/")
-async def retrieve(arguments: Request):  # see the corresponding method in unified_retriever.py
+async def retrieve(request: Request):  # see the corresponding method in unified_retriever.py
     try:
-        arguments = await arguments.json()
+        # Parse request body
+        try:
+            arguments = await request.json()
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Failed to parse JSON: {str(e)}")
+        
+        # Extract retrieval method
+        if "retrieval_method" not in arguments:
+            raise HTTPException(status_code=400, detail="Missing 'retrieval_method' in request")
+        
         retrieval_method = arguments.pop("retrieval_method")
-        assert retrieval_method in ("retrieve_from_elasticsearch",), f"Unknown retrieval_method: {retrieval_method}"
-        start_time = perf_counter()
-        retrieval = getattr(retriever, retrieval_method)(**arguments)
-        end_time = perf_counter()
-        time_in_seconds = round(end_time - start_time, 1)
-        return {"retrieval": retrieval, "time_in_seconds": time_in_seconds}
-    except AssertionError as e:
-        from fastapi import HTTPException
-        raise HTTPException(status_code=400, detail=f"Invalid request: {str(e)}")
-    except AttributeError as e:
-        from fastapi import HTTPException
-        raise HTTPException(status_code=400, detail=f"Unknown retrieval method or retriever not initialized: {str(e)}")
+        if retrieval_method not in ("retrieve_from_elasticsearch",):
+            raise HTTPException(status_code=400, detail=f"Unknown retrieval_method: {retrieval_method}. Expected: retrieve_from_elasticsearch")
+        
+        # Execute retrieval
+        try:
+            start_time = perf_counter()
+            retrieval = getattr(retriever, retrieval_method)(**arguments)
+            end_time = perf_counter()
+            time_in_seconds = round(end_time - start_time, 1)
+            return {"retrieval": retrieval, "time_in_seconds": time_in_seconds}
+        except AttributeError as e:
+            raise HTTPException(status_code=400, detail=f"Unknown retrieval method or retriever not initialized: {str(e)}")
+        except TypeError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid arguments for {retrieval_method}: {str(e)}")
+        except Exception as e:
+            import traceback
+            error_detail = {
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "traceback": traceback.format_exc(),
+                "retrieval_method": retrieval_method,
+                "arguments_keys": list(arguments.keys())
+            }
+            raise HTTPException(status_code=500, detail=error_detail)
+    except HTTPException:
+        # Re-raise HTTPException as-is
+        raise
     except Exception as e:
+        # Catch any other unexpected errors
         import traceback
         error_detail = {
             "error": str(e),
             "error_type": type(e).__name__,
             "traceback": traceback.format_exc()
         }
-        from fastapi import HTTPException
         raise HTTPException(status_code=500, detail=error_detail)

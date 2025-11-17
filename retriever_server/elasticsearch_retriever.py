@@ -39,6 +39,17 @@ class ElasticsearchRetriever:
         self.splade_model = splade_model
         self.splade_tokenizer = splade_tokenizer
         self.device = torch.device(device or ("cuda" if torch.cuda.is_available() else "cpu"))
+        self.hybrid_weights = hybrid_weights or {"bm25": 1.0, "dense": 1.0, "splade": 1.0}
+        self.reranker = reranker
+        self.rerank_top_k = max(1, rerank_top_k)
+
+        if isinstance(self.dense_model, torch.nn.Module):
+            self.dense_model.to(self.device)
+            self.dense_model.eval()
+        if self.splade_model is not None:
+            self.splade_model.to(self.device)
+            self.splade_model.eval()
+
     def _build_client(self, host: str, port: int) -> Elasticsearch:
         parsed = urlparse(host)
         if parsed.scheme:
@@ -51,16 +62,6 @@ class ElasticsearchRetriever:
             connection = {"host": host, "port": port, "scheme": "http"}
 
         return Elasticsearch(hosts=[connection], request_timeout=30)
-        self.hybrid_weights = hybrid_weights or {"bm25": 1.0, "dense": 1.0, "splade": 1.0}
-        self.reranker = reranker
-        self.rerank_top_k = max(1, rerank_top_k)
-
-        if isinstance(self.dense_model, torch.nn.Module):
-            self.dense_model.to(self.device)
-            self.dense_model.eval()
-        if self.splade_model is not None:
-            self.splade_model.to(self.device)
-            self.splade_model.eval()
 
     def retrieve_paragraphs(
         self,
