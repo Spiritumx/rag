@@ -836,7 +836,7 @@ def hash_str(string: str) -> str:
     return str(int(hashlib.sha256(string.encode("utf-8")).hexdigest(), 16) % 10**8)
 
 
-def verify_config(config_file_path: str) -> bool:
+def verify_config(config_file_path: str, llm_port_num: str) -> bool:
     # Verifies that all the file_paths used in the config are available.
     # If not, it prints a message of what's not available. This is to be run
     # before the predict.py command.
@@ -846,7 +846,7 @@ def verify_config(config_file_path: str) -> bool:
     retriever_address = get_retriever_address()
     env_variables["RETRIEVER_HOST"] = str(retriever_address["host"])
     env_variables["RETRIEVER_PORT"] = str(retriever_address["port"])
-    llm_server_address = get_llm_server_address(args.llm_port_num)
+    llm_server_address = get_llm_server_address(llm_port_num)
     env_variables["LLM_SERVER_HOST"] = str(llm_server_address["host"])
     env_variables["LLM_SERVER_PORT"] = str(llm_server_address["port"])
     
@@ -1301,7 +1301,7 @@ def main():
         elif args.command == "verify" and not args_best_is_passed:
             if not os.path.exists(local_file_path):
                 raise Exception("Looks like the instantiated config is not available. Make sure to 'write' it first.")
-            verify_config(local_file_path)
+            verify_config(local_file_path, args.llm_port_num)
 
         elif args.command == "predict" and not args_best_is_passed:
             run_command = f"python predict.py {local_file_path} {evaluation_path} --set_name {args.set_name} --llm_port_num {args.llm_port_num}"
