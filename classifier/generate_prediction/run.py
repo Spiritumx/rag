@@ -6,7 +6,10 @@ import re
 import os
 import sys
 import shlex
-os.environ['TRANSFORMERS_CACHE'] = os.path.dirname(os.getcwd()) + '/cache'
+cache_dir = os.path.dirname(os.getcwd()) + '/cache'
+# Use HF_HOME instead of deprecated TRANSFORMERS_CACHE
+os.environ['HF_HOME'] = cache_dir
+os.environ['TRANSFORMERS_CACHE'] = cache_dir  # Keep for backward compatibility
 import copy
 import shutil
 import json

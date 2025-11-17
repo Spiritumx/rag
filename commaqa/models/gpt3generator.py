@@ -14,11 +14,15 @@ logger = logging.getLogger(__name__)
 cache = Cache(os.path.expanduser("~/.cache/gpt_calls"))
 
 
-def get_openai_client(api_key="sk-BZQdNZeSwyih3TKpD95fDd83A90e4556A95f7eB7D489C36b", base_url="https://api.gpt.ge/v1/"):
+def get_openai_client(api_key=None, base_url=None):
     """Create a configurable OpenAI client"""
+    # Priority: passed api_key > environment variable > default
+    final_api_key = api_key or os.getenv("OPENAI_API_KEY") or "sk-BZQdNZeSwyih3TKpD95fDd83A90e4556A95f7eB7D489C36b"
+    final_base_url = base_url or os.getenv("OPENAI_BASE_URL") or "https://api.gpt.ge/v1/"
+    
     return OpenAI(
-        api_key=api_key or os.getenv("OPENAI_API_KEY"),
-        base_url=base_url or os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1")
+        api_key=final_api_key,
+        base_url=final_base_url
     )
 
 
