@@ -54,14 +54,48 @@ def remove_reasoning_sentences(sentences: List[str]) -> List[str]:
     return [sentence for sentence in sentences if not is_reasoning_sentence(sentence)]
 
 
-def safe_post_request(url, params):
-    for _ in range(10):
+def safe_post_request(url, params, max_retries=10, retry_delay=20):
+    """
+    Safely send POST request with retry logic.
+    
+    Args:
+        url: The URL to send the request to
+        params: JSON parameters to send
+        max_retries: Maximum number of retry attempts (default: 10)
+        retry_delay: Delay in seconds between retries (default: 20)
+    
+    Returns:
+        Response object from requests.post()
+    
+    Raises:
+        Exception: If all retry attempts fail
+    """
+    for attempt in range(max_retries):
         try:
-            return requests.post(url, json=params)
-        except:
-            print("Post request didn't succeed. Will wait 20s and retry.")
-            time.sleep(20)
-    raise Exception("Post request couldn't succeed after several attempts.")
+            response = requests.post(url, json=params, timeout=30)
+            if response.status_code == 200:
+                return response
+            else:
+                print(f"Post request to {url} returned status code {response.status_code}. "
+                      f"Attempt {attempt + 1}/{max_retries}. Will wait {retry_delay}s and retry.")
+        except requests.exceptions.ConnectionError as e:
+            print(f"Connection error to {url}: {str(e)}. "
+                  f"Attempt {attempt + 1}/{max_retries}. Will wait {retry_delay}s and retry.")
+        except requests.exceptions.Timeout as e:
+            print(f"Timeout error for {url}: {str(e)}. "
+                  f"Attempt {attempt + 1}/{max_retries}. Will wait {retry_delay}s and retry.")
+        except requests.exceptions.RequestException as e:
+            print(f"Request error to {url}: {str(e)}. "
+                  f"Attempt {attempt + 1}/{max_retries}. Will wait {retry_delay}s and retry.")
+        except Exception as e:
+            print(f"Unexpected error for {url}: {str(e)}. "
+                  f"Attempt {attempt + 1}/{max_retries}. Will wait {retry_delay}s and retry.")
+        
+        if attempt < max_retries - 1:  # Don't sleep on the last attempt
+            time.sleep(retry_delay)
+    
+    raise Exception(f"Post request to {url} couldn't succeed after {max_retries} attempts. "
+                   f"Please check if the retriever service is running at {url}")
 
 
 def remove_wh_words(text: str) -> str:
