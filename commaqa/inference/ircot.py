@@ -12,7 +12,7 @@ from rapidfuzz import fuzz
 from commaqa.inference.prompt_reader import read_prompt
 from commaqa.inference.data_instances import QuestionAnsweringStep, QuestionGenerationStep, Task
 from commaqa.inference.model_search import ParticipantModel
-from commaqa.models.gpt3generator import GPT3Generator
+from commaqa.models.gpt3generator import GPTGenerator
 from commaqa.models.llm_client_generator import LLMClientGenerator
 from commaqa.inference.dataset_readers import get_pid_for_title_paragraph_text
 
@@ -33,7 +33,7 @@ def is_reasoning_sentence(sentence: str) -> bool:
         if sentence.lower().startswith(starter):
             return True
 
-    regex = re.compile("(.*)(\d[\d,]*\.?\d+|\d+) ([+-]) (\d[\d,]*\.?\d+|\d+) = (\d[\d,]*\.?\d+|\d+)(.*)")
+    regex = re.compile(r"(.*)(\d[\d,]*\.?\d+|\d+) ([+-]) (\d[\d,]*\.?\d+|\d+) = (\d[\d,]*\.?\d+|\d+)(.*)")
     match = bool(re.match(regex, sentence))
     if match:
         return True
@@ -634,7 +634,7 @@ class StepByStepLLMTitleGenParticipant(ParticipantModel):
 
         self.max_para_num_words = max_para_num_words
         if gen_model == "gpt3":
-            self.generator = GPT3Generator(**kwargs)
+            self.generator = GPTGenerator(**kwargs)
         elif gen_model == "llm_api":
             self.generator = LLMClientGenerator(**kwargs)
         else:
@@ -755,7 +755,7 @@ class StepByStepCOTGenParticipant(ParticipantModel):
 
         self.max_para_num_words = max_para_num_words
         if gen_model == "gpt3":
-            self.generator = GPT3Generator(**kwargs)
+            self.generator = GPTGenerator(**kwargs)
         elif gen_model == "llm_api":
             self.generator = LLMClientGenerator(**kwargs)
         else:
