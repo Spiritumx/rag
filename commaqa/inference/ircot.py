@@ -76,7 +76,18 @@ def safe_post_request(url, params, max_retries=10, retry_delay=20):
             if response.status_code == 200:
                 return response
             else:
-                print(f"Post request to {url} returned status code {response.status_code}. "
+                # Try to get error details from response
+                error_details = ""
+                try:
+                    error_response = response.json()
+                    if isinstance(error_response, dict):
+                        error_details = f" Error: {error_response.get('detail', error_response.get('error', str(error_response)))}"
+                    else:
+                        error_details = f" Response: {str(error_response)[:200]}"
+                except:
+                    error_details = f" Response text: {response.text[:200]}"
+                
+                print(f"Post request to {url} returned status code {response.status_code}.{error_details} "
                       f"Attempt {attempt + 1}/{max_retries}. Will wait {retry_delay}s and retry.")
         except requests.exceptions.ConnectionError as e:
             print(f"Connection error to {url}: {str(e)}. "
@@ -118,7 +129,7 @@ def get_real_pid_for_title_paragraph_text(
         "document_type": "paragraph_text",
     }
 
-    url = retriever_host.rstrip("/") + ":" + str(retriever_port) + "/retrieve"
+    url = retriever_host.rstrip("/") + ":" + str(retriever_port) + "/retrieve/"
     result = safe_post_request(url, params)
 
     result = result.json()
@@ -426,7 +437,7 @@ class RetrieveAndResetParagraphsParticipant(ParticipantModel):
                     "document_type": "title",
                     "corpus_name": self.source_corpus_name,
                 }
-                url = self.retriever_host.rstrip("/") + ":" + str(self.retriever_port) + "/retrieve"
+                url = self.retriever_host.rstrip("/") + ":" + str(self.retriever_port) + "/retrieve/"
                 result = safe_post_request(url, params)
 
                 locally_mapped_titles = set()
@@ -501,7 +512,7 @@ class RetrieveAndResetParagraphsParticipant(ParticipantModel):
                 if self.valid_titles_are_allowed_titles:
                     params["allowed_titles"] = state.data["valid_titles"]
 
-                url = self.retriever_host.rstrip("/") + ":" + str(self.retriever_port) + "/retrieve"
+                url = self.retriever_host.rstrip("/") + ":" + str(self.retriever_port) + "/retrieve/"
                 result = safe_post_request(url, params)
 
                 if result.ok:
