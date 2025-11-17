@@ -4,6 +4,7 @@ Instantiates a base config with various HP combinations.
 
 import re
 import os
+import sys
 os.environ['TRANSFORMERS_CACHE'] = os.path.dirname(os.getcwd()) + '/cache'
 import copy
 import shutil
@@ -15,6 +16,7 @@ from typing import Dict, List
 import pandas as pd
 import _jsonnet
 import argparse 
+from pathlib import Path
 
 from lib import (
     get_retriever_address,
@@ -912,7 +914,7 @@ def instatiate_config(
 
 
 def infer_dataset(content: str) -> str:
-    regex = re.compile('.*local dataset = "(\w+)";.*', re.DOTALL)
+    regex = re.compile(r'.*local dataset = "(\w+)";.*', re.DOTALL)
     if not regex.match(content):
         raise Exception("Couldn't infer dataset from the config.")
     return re.sub(regex, r"\1", content).strip()
