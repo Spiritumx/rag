@@ -2,6 +2,8 @@ import os
 import shutil
 import subprocess
 import argparse
+import shlex
+from pathlib import Path
 
 from lib import (
     get_retriever_address,
@@ -9,6 +11,9 @@ from lib import (
     infer_source_target_prefix,
     get_config_file_path_from_name_or_path,
 )
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+EVALUATE_SCRIPT = shlex.quote(str(SCRIPT_DIR / "evaluate.py"))
 
 
 def get_git_hash() -> str:
@@ -97,7 +102,7 @@ def main():
 
     if not args.skip_evaluation:
         
-        evaluate_command = " ".join(["python evaluate.py", str(config_filepath), str(args.evaluation_path), '--set_name', args.set_name, '--llm_port_num', args.llm_port_num]).strip()
+        evaluate_command = " ".join([f"python {EVALUATE_SCRIPT}", str(config_filepath), str(args.evaluation_path), '--set_name', args.set_name, '--llm_port_num', args.llm_port_num]).strip()
 
         print(f"Run evaluate_command: \n{evaluate_command}\n")
 
@@ -105,7 +110,7 @@ def main():
             subprocess.call(evaluate_command, shell=True)
         
         evaluate_command = " ".join(
-            ["python evaluate.py", str(config_filepath), str(args.evaluation_path), "--official", '--set_name', args.set_name, '--llm_port_num', args.llm_port_num]
+            [f"python {EVALUATE_SCRIPT}", str(config_filepath), str(args.evaluation_path), "--official", '--set_name', args.set_name, '--llm_port_num', args.llm_port_num]
         ).strip()
 
         print(f"Run evaluate_command: \n{evaluate_command}\n")
