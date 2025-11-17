@@ -81,11 +81,28 @@ def safe_post_request(url, params, max_retries=10, retry_delay=20):
                 try:
                     error_response = response.json()
                     if isinstance(error_response, dict):
-                        error_details = f" Error: {error_response.get('detail', error_response.get('error', str(error_response)))}"
+                        detail = error_response.get('detail', {})
+                        if isinstance(detail, dict):
+                            # FastAPI HTTPException with detailed error
+                            error_msg = detail.get('error', 'Unknown error')
+                            error_type = detail.get('error_type', '')
+                            traceback_info = detail.get('traceback', '')
+                            if error_type:
+                                error_details = f" Error ({error_type}): {error_msg}"
+                            else:
+                                error_details = f" Error: {error_msg}"
+                            # Show first few lines of traceback if available
+                            if traceback_info:
+                                tb_lines = traceback_info.split('\n')[:3]
+                                error_details += f" Traceback: {' | '.join(tb_lines)}"
+                        elif isinstance(detail, str):
+                            error_details = f" Error: {detail}"
+                        else:
+                            error_details = f" Error: {error_response.get('error', str(detail))}"
                     else:
                         error_details = f" Response: {str(error_response)[:200]}"
                 except:
-                    error_details = f" Response text: {response.text[:200]}"
+                    error_details = f" Response text: {response.text[:300]}"
                 
                 print(f"Post request to {url} returned status code {response.status_code}.{error_details} "
                       f"Attempt {attempt + 1}/{max_retries}. Will wait {retry_delay}s and retry.")

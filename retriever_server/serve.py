@@ -166,11 +166,27 @@ async def index():
 
 @app.post("/retrieve/")
 async def retrieve(arguments: Request):  # see the corresponding method in unified_retriever.py
-    arguments = await arguments.json()
-    retrieval_method = arguments.pop("retrieval_method")
-    assert retrieval_method in ("retrieve_from_elasticsearch",)
-    start_time = perf_counter()
-    retrieval = getattr(retriever, retrieval_method)(**arguments)
-    end_time = perf_counter()
-    time_in_seconds = round(end_time - start_time, 1)
-    return {"retrieval": retrieval, "time_in_seconds": time_in_seconds}
+    try:
+        arguments = await arguments.json()
+        retrieval_method = arguments.pop("retrieval_method")
+        assert retrieval_method in ("retrieve_from_elasticsearch",), f"Unknown retrieval_method: {retrieval_method}"
+        start_time = perf_counter()
+        retrieval = getattr(retriever, retrieval_method)(**arguments)
+        end_time = perf_counter()
+        time_in_seconds = round(end_time - start_time, 1)
+        return {"retrieval": retrieval, "time_in_seconds": time_in_seconds}
+    except AssertionError as e:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail=f"Invalid request: {str(e)}")
+    except AttributeError as e:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail=f"Unknown retrieval method or retriever not initialized: {str(e)}")
+    except Exception as e:
+        import traceback
+        error_detail = {
+            "error": str(e),
+            "error_type": type(e).__name__,
+            "traceback": traceback.format_exc()
+        }
+        from fastapi import HTTPException
+        raise HTTPException(status_code=500, detail=error_detail)
