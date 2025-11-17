@@ -67,6 +67,9 @@ def infer_source_target_prefix(config_filepath: str, evaluation_path: str) -> st
 
 def get_config_file_path_from_name_or_path(experiment_name_or_path: str) -> str:
     if not experiment_name_or_path.endswith(".jsonnet"):
+        direct_path = Path("base_configs") / f"{experiment_name_or_path}.jsonnet"
+        if direct_path.exists():
+            return str(direct_path)
         # It's a name
         assert (
             len(experiment_name_or_path.split(os.path.sep)) == 1
@@ -79,12 +82,16 @@ def get_config_file_path_from_name_or_path(experiment_name_or_path: str) -> str:
         ]
         matching_result = [i for i in matching_result if 'backup' not in str(i)]
         #import pdb; pdb.set_trace()
-        assert len(matching_result) == 1 
-        
-        if len(matching_result) != 1:
-            #import pdb; pdb.set_trace()
-            exit(f"Couldn't find one matching path with the given name ({experiment_name_or_path}).")
-        config_filepath = matching_result[0]
+        if len(matching_result) == 1:
+            config_filepath = matching_result[0]
+        elif len(matching_result) == 0:
+            exit(f"Couldn't find any config matching the name ({experiment_name_or_path}).")
+        else:
+            formatted = "\n  - ".join(str(p) for p in matching_result)
+            exit(
+                "Found multiple configs matching the given name "
+                f"({experiment_name_or_path}). Please specify a full path.\n  - {formatted}"
+            )
     else:
         # It's a path
         config_filepath = experiment_name_or_path
