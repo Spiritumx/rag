@@ -1,5 +1,8 @@
 import os
-os.environ['TRANSFORMERS_CACHE'] = os.path.dirname(os.getcwd()) + '/cache' # '/data/soyeong/cache'
+cache_dir = os.path.dirname(os.getcwd()) + '/cache' # '/data/soyeong/cache'
+# Use HF_HOME instead of deprecated TRANSFORMERS_CACHE
+os.environ['HF_HOME'] = cache_dir
+os.environ['TRANSFORMERS_CACHE'] = cache_dir  # Keep for backward compatibility
 import time
 from functools import lru_cache
 
@@ -11,9 +14,11 @@ if "TRANSFORMERS_CACHE" not in os.environ:
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     from constants import TRANSFORMERS_CACHE
 
-    os.environ["TRANSFORMERS_CACHE"] = os.path.expanduser(
+    cache_path = os.path.expanduser(
         os.sep.join(TRANSFORMERS_CACHE.split("/"))  # before importing transformers
     )
+    os.environ["HF_HOME"] = cache_path
+    os.environ["TRANSFORMERS_CACHE"] = cache_path  # Keep for backward compatibility
 
 import torch
 from transformers.generation.stopping_criteria import StoppingCriteria, StoppingCriteriaList

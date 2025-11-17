@@ -23,8 +23,17 @@ random.seed(100)  # Don't change.
 @lru_cache(maxsize=None)
 def get_spacy_object():
     import spacy
+    import subprocess
+    import sys
 
-    return spacy.load("en_core_web_sm")
+    try:
+        return spacy.load("en_core_web_sm")
+    except OSError:
+        # Model not found, download it
+        print("Downloading spaCy model 'en_core_web_sm'...")
+        subprocess.check_call([sys.executable, "-m", "spacy", "download", "en_core_web_sm"], 
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return spacy.load("en_core_web_sm")
 
 
 def is_reasoning_sentence(sentence: str) -> bool:
@@ -784,8 +793,8 @@ class StepByStepCOTGenParticipant(ParticipantModel):
         self.disable_exit = disable_exit
         self.question_prefix = question_prefix
 
-        # Run 'python -m spacy download en_core_web_sm' if not downloaded already.
-        self.spacy_object = spacy.load("en_core_web_sm")
+        # Use get_spacy_object() which handles automatic download if needed
+        self.spacy_object = get_spacy_object()
 
     def return_model_calls(self):
         return {"step_by_step_cot": self.num_calls}
