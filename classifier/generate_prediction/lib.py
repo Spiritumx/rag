@@ -16,7 +16,7 @@ def _root_path(*parts: str) -> Path:
 
 
 def get_retriever_address(suffix: str = ""):
-    retriever_address_config_filepath = ".retriever_address.jsonnet"
+    retriever_address_config_filepath = str(_root_path(".retriever_address.jsonnet"))
     if not os.path.exists(retriever_address_config_filepath):
         raise Exception(f"Retriver address filepath ({retriever_address_config_filepath}) not available.")
     retriever_address_config_ = json.loads(_jsonnet.evaluate_file(retriever_address_config_filepath))
@@ -28,7 +28,7 @@ def get_retriever_address(suffix: str = ""):
 
 
 def get_llm_server_address(llm_port_num : str):
-    llm_server_address_config_filepath = ".llm_server_address.jsonnet"
+    llm_server_address_config_filepath = str(_root_path(".llm_server_address.jsonnet"))
     if not os.path.exists(llm_server_address_config_filepath):
         raise Exception(f"LLM Server address filepath ({llm_server_address_config_filepath}) not available.")
     llm_server_address_config = json.loads(_jsonnet.evaluate_file(llm_server_address_config_filepath))
@@ -40,7 +40,7 @@ def get_llm_server_address(llm_port_num : str):
 
 
 def get_roscoe_server_address(suffix: str = ""):
-    roscoe_server_address_config_filepath = ".roscoe_server_address.jsonnet"
+    roscoe_server_address_config_filepath = str(_root_path(".roscoe_server_address.jsonnet"))
     if not os.path.exists(roscoe_server_address_config_filepath):
         raise Exception(f"Retriver address filepath ({roscoe_server_address_config_filepath}) not available.")
     roscoe_server_address_config_ = json.loads(_jsonnet.evaluate_file(roscoe_server_address_config_filepath))
