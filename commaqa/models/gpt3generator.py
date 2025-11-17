@@ -68,6 +68,7 @@ class GPTGenerator:
     def __init__(
         self,
         model="gpt-4o-mini",
+        engine=None,  # Backward compatibility with old configs
         api_key=None,
         base_url=None,
         temperature=0,
@@ -81,7 +82,8 @@ class GPTGenerator:
         remove_method="first",
     ):
         self.client = get_openai_client(api_key, base_url)
-        self.model = model
+        # Support both 'engine' (old) and 'model' (new) parameter names
+        self.model = engine if engine is not None else model
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.top_p = top_p
