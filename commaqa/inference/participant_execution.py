@@ -19,7 +19,7 @@ class ExecutionParticipant(ParticipantModel):
         self.per_model_calls = {"executer": 0, "op_executer": 0}
         self.kb_lang_groups = None
         self.model_lib = None
-        self.operation_regex = re.compile("\((.+)\) \[([^\]]+)\] (.*)")
+        self.operation_regex = re.compile(r"\((.+)\) \[([^\]]+)\] (.*)")
         self.remodel_mode = False
         if remodel_file:
             self.remodel_mode = True

@@ -11,13 +11,13 @@ logger = logging.getLogger(__name__)
 class MathModel(ModelExecutor):
     def __init__(self, **kwargs):
         self.func_regex = {
-            "is_greater\((.+) \| (.+)\)": self.greater_than,
-            "is_smaller\((.+) \| (.+)\)": self.smaller_than,
-            "diff\((.+) \| (.+)\)": self.diff,
-            "belongs_to\((.+) \| (.+)\)": self.belongs_to,
-            "max\((.+)\)": self.max,
-            "min\((.+)\)": self.min,
-            "count\((.+)\)": self.count,
+            r"is_greater\((.+) \| (.+)\)": self.greater_than,
+            r"is_smaller\((.+) \| (.+)\)": self.smaller_than,
+            r"diff\((.+) \| (.+)\)": self.diff,
+            r"belongs_to\((.+) \| (.+)\)": self.belongs_to,
+            r"max\((.+)\)": self.max,
+            r"min\((.+)\)": self.min,
+            r"count\((.+)\)": self.count,
         }
         super(MathModel, self).__init__(**kwargs)
 

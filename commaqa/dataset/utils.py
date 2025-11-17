@@ -1,15 +1,15 @@
 import itertools
 import re
 
-pred_match = re.compile("(.*)\((.*)\)$")
+pred_match = re.compile(r"(.*)\((.*)\)$")
 
 
 def get_answer_indices(question_str):
-    return [int(m.group(1)) for m in re.finditer("#(\d)", question_str)]
+    return [int(m.group(1)) for m in re.finditer(r"#(\d)", question_str)]
 
 
 def get_question_indices(question_str):
-    return [int(m.group(1)) for m in re.finditer("\$(\d)", question_str)]
+    return [int(m.group(1)) for m in re.finditer(r"\$(\d)", question_str)]
 
 
 def is_question_var(var_name):

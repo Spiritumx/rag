@@ -1,9 +1,17 @@
 import os
 from typing import List, Dict
 
+import nltk
 from nltk import word_tokenize
 from nltk.corpus import stopwords
 from nltk.stem.porter import PorterStemmer
+
+# Download required NLTK data if not present
+try:
+    stopwords.words("english")
+except LookupError:
+    nltk.download('stopwords', quiet=True)
+    nltk.download('punkt', quiet=True)
 
 stemmer = PorterStemmer()
 
