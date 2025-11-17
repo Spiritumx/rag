@@ -14,8 +14,27 @@ class UnifiedRetriever:
         self,
         host: str = "http://localhost/",
         port: int = 9200,
+        dense_model=None,
+        dense_tokenizer=None,
+        splade_model=None,
+        splade_tokenizer=None,
+        device: str = None,
+        hybrid_weights=None,
+        reranker=None,
+        rerank_top_k: int = 50,
     ):
-        self._elasticsearch_retriever = ElasticsearchRetriever(host=host, port=port)
+        self._elasticsearch_retriever = ElasticsearchRetriever(
+            host=host,
+            port=port,
+            dense_model=dense_model,
+            dense_tokenizer=dense_tokenizer,
+            splade_model=splade_model,
+            splade_tokenizer=splade_tokenizer,
+            device=device,
+            hybrid_weights=hybrid_weights,
+            reranker=reranker,
+            rerank_top_k=rerank_top_k,
+        )
 
     def retrieve_from_elasticsearch(
         self,
@@ -27,6 +46,8 @@ class UnifiedRetriever:
         allowed_paragraph_types: List[str] = None,
         paragraph_index: int = None,
         corpus_name: str = None,
+        retrieval_backend: str = "bm25",
+        hybrid_weights=None,
     ) -> List[Dict]:
 
         assert document_type in ("title", "paragraph_text", "title_paragraph_text")
@@ -52,6 +73,8 @@ class UnifiedRetriever:
                 corpus_name=corpus_name,
                 query_title_field_too=query_title_field_too,
                 max_buffer_count=max_buffer_count,
+                retrieval_backend=retrieval_backend,
+                hybrid_weights=hybrid_weights,
             )
 
         elif document_type == "title":

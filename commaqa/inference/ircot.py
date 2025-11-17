@@ -271,11 +271,15 @@ class RetrieveAndResetParagraphsParticipant(ParticipantModel):
         global_max_num_paras=100,
         next_model=None,
         end_state="[EOQ]",
+        hybrid_weights=None,
     ):
 
         assert retrieval_type in (
             "map_generated_to_valid_titles",
             "bm25",
+            "hnsw",
+            "splade",
+            "hybrid",
         ), f"retrieval_type {retrieval_type} not among the valid choices."
 
         assert query_source in (
@@ -287,10 +291,6 @@ class RetrieveAndResetParagraphsParticipant(ParticipantModel):
         assert document_type in ("title", "paragraph_text", "title_paragraph_text")
 
         self.valid_titles_are_allowed_titles = valid_titles_are_allowed_titles
-        if valid_titles_are_allowed_titles:
-            assert (
-                retrieval_type == "bm25"
-            ), "valid_titles_are_allowed_titles is applicable only when retrieval_type is bm25."
 
         if set_result_as_valid_titles:
             assert (
@@ -300,6 +300,7 @@ class RetrieveAndResetParagraphsParticipant(ParticipantModel):
 
         self.global_max_num_paras = global_max_num_paras
         self.retrieval_type = retrieval_type
+        self.hybrid_weights = hybrid_weights
         self.next_model = next_model
         self.end_state = end_state
         self.retriever_host = retriever_host
@@ -324,7 +325,7 @@ class RetrieveAndResetParagraphsParticipant(ParticipantModel):
         else:
             self.allowed_paragraph_types = [None]
 
-        if retrieval_type == "bm25":
+        if retrieval_type in ("bm25", "hnsw", "splade", "hybrid"):
             if self.retrieval_count is None:
                 raise Exception(f"retrieval_count is needed for the retrieval_type {retrieval_type}.")
             if self.source_corpus_name is None:
@@ -427,30 +428,32 @@ class RetrieveAndResetParagraphsParticipant(ParticipantModel):
             if self.set_result_as_valid_titles:
                 state.data["valid_titles"] = selected_titles
 
-        elif self.retrieval_type == "bm25":
+        elif self.retrieval_type in ("bm25", "hnsw", "splade", "hybrid"):
 
             retrieval_method = "retrieve_from_elasticsearch"
-            input_query = remove_wh_words(input_query)
+            backend_query = remove_wh_words(input_query) if self.retrieval_type == "bm25" else input_query
 
             params = {
                 "retrieval_method": retrieval_method,
-                "query_text": input_query,
+                "query_text": backend_query,
                 "max_hits_count": self.retrieval_count,
                 "corpus_name": self.source_corpus_name,
+                "document_type": self.document_type,
+                "retrieval_backend": self.retrieval_type,
             }
+
+            if self.retrieval_type == "hybrid" and self.hybrid_weights:
+                params["hybrid_weights"] = self.hybrid_weights
 
             for allowed_paragraph_type in self.allowed_paragraph_types:
 
                 if allowed_paragraph_type is not None:
                     params["allowed_paragraph_types"] = [allowed_paragraph_type]
 
-                if not input_query.strip():
+                if not backend_query.strip():
                     # can happen when query is based on last cot gen
                     # but it's a reasoning (non-factual) sentence.
                     continue
-
-                if self.retrieval_type == "bm25":
-                    params["document_type"] = self.document_type
 
                 if self.valid_titles_are_allowed_titles:
                     params["allowed_titles"] = state.data["valid_titles"]

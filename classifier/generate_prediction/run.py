@@ -792,20 +792,40 @@ dataset_to_prompt_set_to_qids = {
     },
 }
 
+SPECIAL_INSTANTIATION_KEYS = {"retrieval_mode"}
+
+
+def apply_special_replacements(file_content: str, replacements: Dict[str, str]) -> str:
+    """Apply replacements that are not tied to local variables in jsonnet."""
+
+    retrieval_mode = replacements.get("retrieval_mode")
+    if retrieval_mode:
+        retrieval_mode = retrieval_mode.replace('"', "")
+        pattern = re.compile(r'("retrieval_type"\s*:\s*)"[^"]+"')
+        if not re.search(pattern, file_content):
+            raise Exception(
+                "retrieval_type not found in config while attempting to set retrieval_mode."
+            )
+        file_content = re.sub(pattern, r'\1"' + retrieval_mode + '"', file_content)
+    return file_content
+
+
 instantiation_schemes = {
     "nor_qa": {},
-    "oner": {"bm25_retrieval_count": ["15"]}, # gpt: ['6'] flan: ["15"]
+    "oner": {"bm25_retrieval_count": ["6"]}, # gpt: ['6'] flan: ["15"]
     "oner_qa": {
         "bm25_retrieval_count": ["15"],
         "distractor_count": ['"1"'],
     },
     "ircot": {
-        "bm25_retrieval_count": ["4", "6", "8"],
-        "distractor_count": ['"1"', '"2"', '"3"'],
+        "bm25_retrieval_count": ["6"],
+        "distractor_count": ['"1"'],
+        "retrieval_mode": ["bm25", "hnsw", "splade", "hybrid"],
     },
     "ircot_qa": {
-        "bm25_retrieval_count": ["6"], # gpt: ['3'] flan: ["6"]
+        "bm25_retrieval_count": ["3"], # gpt: ['3'] flan: ["6"]
         "distractor_count": ['"1"'],
+        "retrieval_mode": ["bm25", "hnsw", "splade", "hybrid"],
     },
 }
 
@@ -1158,10 +1178,21 @@ def main():
         local_file_content = copy.deepcopy(file_content)
 
         variable_replacements = {}
+        special_variable_replacements = {}
         for key, value in zip(instantiation_scheme.keys(), values):
-            variable_replacements[key] = copy.deepcopy(value)
+            if key in SPECIAL_INSTANTIATION_KEYS:
+                special_variable_replacements[key] = copy.deepcopy(value)
+            else:
+                variable_replacements[key] = copy.deepcopy(value)
 
-        local_file_content = instatiate_config(content=local_file_content, variable_replacements=variable_replacements)
+        local_file_content = instatiate_config(
+            content=local_file_content, variable_replacements=variable_replacements
+        )
+        if special_variable_replacements:
+            local_file_content = apply_special_replacements(
+                local_file_content, special_variable_replacements
+            )
+            variable_replacements.update(special_variable_replacements)
 
         local_names = copy.deepcopy(names)
         for key, value in variable_replacements.items():

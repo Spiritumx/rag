@@ -4,6 +4,7 @@ Example script for querying different index types (BM25, HNSW, SPLADE)
 import argparse
 from elasticsearch import Elasticsearch
 import torch
+import os
 from typing import List, Dict
 
 
@@ -119,18 +120,16 @@ def query_splade(es: Elasticsearch, index_name: str, query_text: str, splade_mod
     # Build bool query with rank_feature
     should_clauses = [
         {
-            "rank_feature": {
-                "field": "splade_vector",
-                "boost": score,
-                "linear": {}
-            },
             "term": {
-                "splade_vector": token
+                f"splade_vector.{token}": {
+                    "value": 1.0,
+                    "boost": score
+                }
             }
         }
         for token, score in splade_dict.items()
     ]
-    
+
     query = {
         "size": top_k,
         "query": {
@@ -248,23 +247,29 @@ def main():
     dense_model = None
     splade_model = None
     splade_tokenizer = None
+
+    # Auto-detect local models in retriever_server/models directory
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    local_model_dir = os.path.join(script_dir, "models")
     
     if args.method in ["hnsw", "hybrid", "all"] and has_dense:
         print(f"\nLoading dense model: {args.dense_model}")
+        local_dense_path = os.path.join(local_model_dir, "dense", "all-MiniLM-L6-v2")
         from sentence_transformers import SentenceTransformer
-        dense_model = SentenceTransformer(args.dense_model)
+        dense_model = SentenceTransformer(local_dense_path)
         dense_model = dense_model.to(device)
     
     if args.method in ["splade", "all"] and has_splade:
         print(f"\nLoading SPLADE model: {args.splade_model}")
         from transformers import AutoModelForMaskedLM, AutoTokenizer
-        splade_tokenizer = AutoTokenizer.from_pretrained(args.splade_model)
-        splade_model = AutoModelForMaskedLM.from_pretrained(args.splade_model)
+        local_splade_path = os.path.join(local_model_dir, "splade", "splade-v3")
+        splade_tokenizer = AutoTokenizer.from_pretrained(local_splade_path)
+        splade_model = AutoModelForMaskedLM.from_pretrained(local_splade_path)
         splade_model = splade_model.to(device)
         splade_model.eval()
     
     print(f"\nQuery: '{args.query}'")
-    
+
     # Execute queries
     if args.method in ["bm25", "all"]:
         results = query_bm25(es, args.index_name, args.query, args.top_k)

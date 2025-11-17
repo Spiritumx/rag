@@ -63,7 +63,7 @@ local rc_qa_type = "cot"; # Choices: direct, cot
             "prompt_reader_args": prompt_reader_args,
             "end_state": "[EOQ]",
             "gen_model": "gpt3",
-            "engine": "gpt-3.5-turbo-instruct",
+            "engine": "gpt-4o-mini",
             "retry_after_n_seconds": 50,
             "add_context": true,
         },
