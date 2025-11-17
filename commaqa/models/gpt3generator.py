@@ -27,8 +27,9 @@ def get_openai_client(api_key=None, base_url=None):
 
 
 @cache.memoize()
-def cached_openai_call(client, model, messages, temperature, max_tokens, top_p, frequency_penalty, presence_penalty, stop, n):
-    """Cached ChatCompletion request"""
+def cached_openai_call(api_key, base_url, model, messages, temperature, max_tokens, top_p, frequency_penalty, presence_penalty, stop, n):
+    """Cached ChatCompletion request - uses api_key and base_url instead of client to avoid serialization issues"""
+    client = get_openai_client(api_key, base_url)
     return client.chat.completions.create(
         model=model,
         messages=messages,
@@ -42,10 +43,10 @@ def cached_openai_call(client, model, messages, temperature, max_tokens, top_p, 
     )
 
 
-def openai_call(client:OpenAI, model, messages, temperature, max_tokens, top_p, frequency_penalty, presence_penalty, stop, n):
+def openai_call(client:OpenAI, api_key, base_url, model, messages, temperature, max_tokens, top_p, frequency_penalty, presence_penalty, stop, n):
     """Live call or cached call depending on temperature"""
     if temperature == 0:
-        return cached_openai_call(client, model, messages, temperature, max_tokens, top_p, frequency_penalty, presence_penalty, stop, n)
+        return cached_openai_call(api_key, base_url, model, messages, temperature, max_tokens, top_p, frequency_penalty, presence_penalty, stop, n)
 
     return client.chat.completions.create(
         model=model,
@@ -88,6 +89,9 @@ class GPTGenerator:
         self.client = get_openai_client(api_key, base_url)
         # Support both 'engine' (old) and 'model' (new) parameter names
         self.model = engine if engine is not None else model
+        # Save api_key and base_url for caching (client object is not serializable)
+        self.api_key = api_key
+        self.base_url = base_url
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.top_p = top_p
@@ -125,6 +129,8 @@ class GPTGenerator:
             try:
                 response = openai_call(
                     client=self.client,
+                    api_key=self.api_key,
+                    base_url=self.base_url,
                     model=self.model,
                     messages=messages,
                     temperature=self.temperature,
