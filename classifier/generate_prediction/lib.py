@@ -7,6 +7,13 @@ import _jsonnet
 from rapidfuzz import fuzz
 import requests
 
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+BASE_CONFIGS_DIR = PROJECT_ROOT / "base_configs"
+
+
+def _root_path(*parts: str) -> Path:
+    return PROJECT_ROOT.joinpath(*parts)
+
 
 def get_retriever_address(suffix: str = ""):
     retriever_address_config_filepath = ".retriever_address.jsonnet"
@@ -67,27 +74,22 @@ def infer_source_target_prefix(config_filepath: str, evaluation_path: str) -> st
 
 def get_config_file_path_from_name_or_path(experiment_name_or_path: str) -> str:
     if not experiment_name_or_path.endswith(".jsonnet"):
-        direct_path = Path("base_configs") / f"{experiment_name_or_path}.jsonnet"
+        direct_path = BASE_CONFIGS_DIR / f"{experiment_name_or_path}.jsonnet"
         if direct_path.exists():
             return str(direct_path)
         # It's a name
         assert (
             len(experiment_name_or_path.split(os.path.sep)) == 1
         ), "Experiment name shouldn't contain any path separators."
-        matching_result = list(Path(".").rglob("**/*" + experiment_name_or_path + ".jsonnet"))
-        matching_result = [
-            _result
-            for _result in matching_result
-            if os.path.splitext(os.path.basename(_result))[0] == experiment_name_or_path
-        ]
-        matching_result = [i for i in matching_result if 'backup' not in str(i)]
-        #import pdb; pdb.set_trace()
+        pattern = f"{experiment_name_or_path}.jsonnet"
+        matching_result = list(BASE_CONFIGS_DIR.rglob(pattern))
+        matching_result = [path for path in matching_result if 'backup' not in str(path)]
         if len(matching_result) == 1:
             config_filepath = matching_result[0]
         elif len(matching_result) == 0:
             exit(f"Couldn't find any config matching the name ({experiment_name_or_path}).")
         else:
-            formatted = "\n  - ".join(str(p) for p in matching_result)
+            formatted = "\n  - ".join(str(p.relative_to(PROJECT_ROOT)) for p in matching_result)
             exit(
                 "Found multiple configs matching the given name "
                 f"({experiment_name_or_path}). Please specify a full path.\n  - {formatted}"
