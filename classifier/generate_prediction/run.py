@@ -5,6 +5,7 @@ Instantiates a base config with various HP combinations.
 import re
 import os
 import sys
+import shlex
 os.environ['TRANSFORMERS_CACHE'] = os.path.dirname(os.getcwd()) + '/cache'
 import copy
 import shutil
@@ -29,6 +30,12 @@ import logging
 import time
 
 from functools import wraps
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+CLASSIFIER_ROOT = SCRIPT_DIR.parent
+REPO_ROOT = CLASSIFIER_ROOT.parent
+PREDICT_SCRIPT = shlex.quote(str(SCRIPT_DIR / "predict.py"))
+EVALUATE_SCRIPT = shlex.quote(str(SCRIPT_DIR / "evaluate.py"))
 
 logging.basicConfig(format = '%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
                     datefmt = '%m/%d/%Y %H:%M:%S',
@@ -1306,7 +1313,7 @@ def main():
             verify_config(local_file_path, args.llm_port_num)
 
         elif args.command == "predict" and not args_best_is_passed:
-            run_command = f"python predict.py {local_file_path} {evaluation_path} --set_name {args.set_name} --llm_port_num {args.llm_port_num}"
+            run_command = f"python {PREDICT_SCRIPT} {local_file_path} {evaluation_path} --set_name {args.set_name} --llm_port_num {args.llm_port_num}"
 
             if args.silent:
                 run_command += " --silent"
@@ -1398,7 +1405,7 @@ def main():
                     max_metric_value = metric_value_
 
         elif args.command == "evaluate" and not args_best_is_passed:
-            run_command = f"python evaluate.py {local_file_path} {evaluation_path} --set_name {args.set_name} --llm_port_num {args.llm_port_num}"
+            run_command = f"python {EVALUATE_SCRIPT} {local_file_path} {evaluation_path} --set_name {args.set_name} --llm_port_num {args.llm_port_num}"
             if os.path.exists(metrics_file_path) and args.skip_if_exists:
                 print(f"Skipping as the metrics file already exists here: {metrics_file_path}.")
                 continue
@@ -1613,7 +1620,7 @@ def main():
 
         if args.command == "predict":
 
-            run_command = f"python predict.py {target_write_best_config_file_path} {evaluation_path} --llm_port_num {args.llm_port_num}"
+            run_command = f"python {PREDICT_SCRIPT} {target_write_best_config_file_path} {evaluation_path} --llm_port_num {args.llm_port_num}"
 
             if args.silent:
                 run_command += " --silent"
@@ -1635,7 +1642,7 @@ def main():
         if args.command == "evaluate":
             if os.path.exists(prediction_file_path):
                 #import pdb; pdb.set_trace()
-                run_command = f"python evaluate.py {target_write_best_config_file_path} {evaluation_path} --set_name {args.set_name} --llm_port_num {args.llm_port_num}"
+                run_command = f"python {EVALUATE_SCRIPT} {target_write_best_config_file_path} {evaluation_path} --set_name {args.set_name} --llm_port_num {args.llm_port_num}"
                 if os.path.exists(metrics_file_path) and args.skip_if_exists:
                     print(f"Skipping as the metrics file already exists here: {metrics_file_path}.")
                 else:
@@ -1652,8 +1659,7 @@ def main():
 
 
 if __name__ == "__main__":
-    project_root = Path(__file__).resolve().parents[1]
-    if str(project_root) not in sys.path:
-        sys.path.insert(0, str(project_root))
-    os.chdir(project_root)
+    if str(CLASSIFIER_ROOT) not in sys.path:
+        sys.path.insert(0, str(CLASSIFIER_ROOT))
+    os.chdir(REPO_ROOT)
     main()
