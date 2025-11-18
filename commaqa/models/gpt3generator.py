@@ -103,7 +103,22 @@ class GPTGenerator:
         self.remove_method = remove_method
 
         # context limits (adjustable)
-        self.model_tokens_limit = 120000 if "gpt-4o" in model else 4000
+        # Set context limits based on model capabilities
+        if "gpt-4o" in model.lower():
+            # GPT-4o models support up to 128k tokens
+            self.model_tokens_limit = 120000
+        elif "gpt-4" in model.lower():
+            # GPT-4 models support up to 8k tokens (some variants up to 32k)
+            self.model_tokens_limit = 8000
+        elif "gpt-3.5" in model.lower() or "gpt-35" in model.lower():
+            # GPT-3.5 models support up to 16k tokens
+            self.model_tokens_limit = 16000
+        elif "gpt" in model.lower():
+            # Other GPT models, use a conservative limit
+            self.model_tokens_limit = 8000
+        else:
+            # Default for other models
+            self.model_tokens_limit = 4000
 
 
     def generate_text_sequence(self, prompt):
@@ -124,6 +139,8 @@ class GPTGenerator:
 
         messages = [{"role": "user", "content": prompt}]
         success = False
+        response = None
+        has_retried_for_none = False
 
         for attempt in range(10):  # Retry loop safety
             try:
@@ -141,6 +158,22 @@ class GPTGenerator:
                     stop=self.stop,
                     n=self.n,
                 )
+                
+                # Check if response has None values
+                has_none = False
+                if response and response.choices:
+                    for c in response.choices:
+                        if c.message is None or c.message.content is None:
+                            has_none = True
+                            break
+                
+                # If we detect None and haven't retried yet, retry once
+                if has_none and not has_retried_for_none:
+                    logger.warning(f"Detected None in API response (attempt {attempt + 1}), retrying once...")
+                    has_retried_for_none = True
+                    time.sleep(self.retry_after_n_seconds)
+                    continue  # Retry the request
+                
                 success = True
                 break
 
@@ -148,9 +181,20 @@ class GPTGenerator:
                 logger.warning(f"OpenAI request failed: {e}, retrying in {self.retry_after_n_seconds}s...")
                 time.sleep(self.retry_after_n_seconds)
 
-        if not success:
+        if not success or response is None:
             raise RuntimeError("Failed to retrieve model output after retries.")
 
         # Extract results
-        outputs = [(c.message.content.strip(), idx) for idx, c in enumerate(response.choices)]
+        outputs = []
+        for idx, c in enumerate(response.choices):
+            if c.message is None:
+                logger.warning(f"Choice {idx} has no message, skipping")
+                continue
+            content = c.message.content if c.message.content is not None else ""
+            outputs.append((content.strip(), idx))
+        
+        if not outputs:
+            logger.warning("No valid outputs from API response, returning empty result")
+            return [("", 0)]
+        
         return sorted(outputs, key=lambda x: x[1])
