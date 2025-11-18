@@ -15,6 +15,56 @@ def _root_path(*parts: str) -> Path:
     return PROJECT_ROOT.joinpath(*parts)
 
 
+def get_raw_data_dir() -> Path:
+    """
+    Get the raw_data directory path.
+    Checks multiple possible locations:
+    1. Environment variable RAW_DATA_DIR
+    2. Environment variable AUTODL_TMP_DIR (with raw_data subdirectory)
+    3. PROJECT_ROOT / "raw_data"
+    4. /root/autodl-tmp/raw_data (common autodl location)
+    5. /autodl-tmp/raw_data
+    """
+    # Check environment variables first
+    if os.environ.get("RAW_DATA_DIR"):
+        raw_data_dir = Path(os.environ["RAW_DATA_DIR"])
+        if raw_data_dir.exists():
+            return raw_data_dir
+    
+    if os.environ.get("AUTODL_TMP_DIR"):
+        raw_data_dir = Path(os.environ["AUTODL_TMP_DIR"]) / "raw_data"
+        if raw_data_dir.exists():
+            return raw_data_dir
+    
+    # Check common autodl locations
+    autodl_paths = [
+        Path("/root/autodl-tmp/raw_data"),
+        Path("/autodl-tmp/raw_data"),
+        Path("/root/autodl-tmp"),
+    ]
+    for path in autodl_paths:
+        if path.exists():
+            # If it's already raw_data, return it; otherwise append raw_data
+            if path.name == "raw_data":
+                return path
+            else:
+                raw_data_path = path / "raw_data"
+                if raw_data_path.exists():
+                    return raw_data_path
+    
+    # Default to PROJECT_ROOT / "raw_data"
+    default_path = PROJECT_ROOT / "raw_data"
+    if not default_path.exists():
+        print(f"WARNING: raw_data directory not found. Tried:")
+        print(f"  - RAW_DATA_DIR env var")
+        print(f"  - AUTODL_TMP_DIR env var")
+        print(f"  - /root/autodl-tmp/raw_data")
+        print(f"  - /autodl-tmp/raw_data")
+        print(f"  - {default_path}")
+        print(f"Using default: {default_path}")
+    return default_path
+
+
 def get_retriever_address(suffix: str = ""):
     retriever_address_config_filepath = str(_root_path(".retriever_address.jsonnet"))
     if not os.path.exists(retriever_address_config_filepath):

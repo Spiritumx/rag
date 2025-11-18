@@ -25,6 +25,7 @@ from lib import (
     write_json,
     write_jsonl,
     get_config_file_path_from_name_or_path,
+    get_raw_data_dir,
 )
 from metrics.drop_answer_em_f1 import DropAnswerEmAndF1
 from metrics.support_em_f1 import SupportEmF1Metric
@@ -149,7 +150,7 @@ def official_evaluate_by_dicts(
 
         # prepare ground_truth file:
         temp_ground_truth_file_path = os.path.join(".temp", uuid.uuid4().hex)
-        original_data = read_json(os.path.join("raw_data", "hotpotqa", "hotpot_dev_distractor_v1.json"))
+        original_data = read_json(str(get_raw_data_dir() / "hotpotqa" / "hotpot_dev_distractor_v1.json"))
         filtered_data = [datum for datum in original_data if datum["_id"] in question_ids]
         write_json(filtered_data, temp_ground_truth_file_path)
 
@@ -210,7 +211,7 @@ def official_evaluate_by_dicts(
 
         # prepare ground_truth file:
         temp_ground_truth_file_path = os.path.join(".temp", uuid.uuid4().hex)
-        original_data = read_json(os.path.join("raw_data", "2wikimultihopqa", "dev.jsonl"))
+        original_data = read_jsonl(str(get_raw_data_dir() / "2wikimultihopqa" / "dev.jsonl"))
         filtered_data = [datum for datum in original_data if datum["_id"] in question_ids]
         write_json(filtered_data, temp_ground_truth_file_path)
 
@@ -230,7 +231,7 @@ def official_evaluate_by_dicts(
         # run the command
         temp_ground_truth_file_path = os.path.join(os.pardir, os.pardir, temp_ground_truth_file_path)
         temp_prediction_file_path = os.path.join(os.pardir, os.pardir, temp_prediction_file_path)
-        alias_file_path = os.path.join(os.pardir, os.pardir, "raw_data", "2wikimultihopqa", "id_aliases.json")
+        alias_file_path = str(get_raw_data_dir() / "2wikimultihopqa" / "id_aliases.json")
         temp_output_file_path = os.path.join(os.pardir, os.pardir, ".temp", uuid.uuid4().hex)
 
         evaluation_directory = os.path.join("official_evaluation", "2wikimultihopqa")
@@ -271,7 +272,7 @@ def official_evaluate_by_dicts(
 
         # prepare ground_truth file:
         temp_ground_truth_file_path = os.path.join(".temp", uuid.uuid4().hex)
-        original_data = read_jsonl(os.path.join("raw_data", "musique", "musique_ans_v1.0_dev.jsonl"))
+        original_data = read_jsonl(str(get_raw_data_dir() / "musique" / "musique_ans_v1.0_dev.jsonl"))
         original_keyed_data = {datum["id"]: datum for datum in original_data}
         filtered_data = [original_keyed_data[qid] for qid in question_ids]
         write_jsonl(filtered_data, temp_ground_truth_file_path)
