@@ -116,7 +116,8 @@ def main():
 
     print(f"Initializing {args.model}...")
     # 初始化生成器
-    generator = GPTGenerator(model=args.model, temperature=0.7, max_tokens=500)
+    # Explicitly set stop=None to avoid passing unsupported parameters to newer models like gpt-5
+    generator = GPTGenerator(model=args.model, temperature=0.7, max_tokens=500, stop=None)
 
     augmented_data = []
     
