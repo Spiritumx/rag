@@ -24,6 +24,13 @@ import re
 from preprocess_utils import *
 import argparse
 
+# 自动切换到项目根目录，确保相对路径正确
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(current_dir, "../../"))
+if os.getcwd() != project_root:
+    print(f"Changing working directory to project root: {project_root}")
+    os.chdir(project_root)
+
 def find_available_retrieval_modes(pred_dir, model_name):
     """扫描 predictions 目录，找到所有可用的检索模式"""
     modes = set()
