@@ -162,7 +162,7 @@ wait_for_slot() {
 # 启动所有任务
 task_id=0
 for dataset in "${datasets[@]}"; do
-    ((task_id++))
+    ((++task_id))
     
     wait_for_slot
     
