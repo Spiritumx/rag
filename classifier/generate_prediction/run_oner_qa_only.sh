@@ -164,7 +164,7 @@ for dataset in "${datasets[@]}"; do
     wait_for_slot
     
     run_dataset "$dataset" "$task_id" &
-    local pid=$!
+    pid=$!
     PIDS[$pid]="$dataset"
     ((running_count++))
     
