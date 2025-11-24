@@ -4,6 +4,7 @@ import sys
 import argparse
 import re
 from tqdm import tqdm
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from preprocess_utils import load_json, save_json
 from openai import OpenAI
 
@@ -47,12 +48,54 @@ Output ONLY the JSON object. Do not include markdown formatting.
 """
     return prompt
 
+def process_item(client, item, model, pbar=None):
+    """处理单个 item 的函数，用于线程池调用"""
+    prompt = construct_prompt(item)
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant designed to output JSON."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            response_format={"type": "json_object"} # 强制 JSON 模式
+        )
+        
+        content = response.choices[0].message.content
+        
+        try:
+            analysis = json.loads(content)
+            
+            # 合并原有字段和新生成的字段
+            new_item = item.copy()
+            new_item.update(analysis)
+            # 确保 recommended_strategy 与原始 label 一致
+            new_item['recommended_strategy'] = item['answer'] 
+            
+            if pbar:
+                pbar.update(1)
+            return new_item
+            
+        except json.JSONDecodeError as e:
+            print(f"\nError parsing JSON content for item {item['id']}: {e}")
+            if pbar:
+                pbar.update(1)
+            return item
+
+    except Exception as e:
+        print(f"\nError processing {item['id']}: {e}")
+        if pbar:
+            pbar.update(1)
+        return item
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_file", type=str, default="data/label.json")
     parser.add_argument("--output_file", type=str, default="data/label_augmented.json")
-    parser.add_argument("--model", type=str, default="gpt-5", help="Model to use for generation")
+    parser.add_argument("--model", type=str, default="gpt-4o", help="Model to use for generation")
     parser.add_argument("--limit", type=int, default=0, help="Limit number of samples for testing (0 for 10% of data, -1 for all)")
+    parser.add_argument("--workers", type=int, default=2, help="Number of parallel workers")
     args = parser.parse_args()
 
     # 处理相对路径
@@ -81,7 +124,7 @@ def main():
         data = data[:limit_count]
         print(f"Limiting to 10% of data: {limit_count} samples.")
 
-    print(f"Initializing OpenAI client for model {args.model}...")
+    print(f"Initializing OpenAI client for model {args.model} with {args.workers} workers...")
     
     # 直接初始化 OpenAI 客户端，绕过 GPTGenerator
     api_key = os.getenv("OPENAI_API_KEY") or "sk-BZQdNZeSwyih3TKpD95fDd83A90e4556A95f7eB7D489C36b"
@@ -92,41 +135,25 @@ def main():
     augmented_data = []
     
     print("Starting augmentation...")
-    for item in tqdm(data):
-        prompt = construct_prompt(item)
-        
-        try:
-            response = client.chat.completions.create(
-                model=args.model,
-                messages=[
-                    {"role": "system", "content": "You are a helpful assistant designed to output JSON."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.7,
-                response_format={"type": "json_object"} # 强制 JSON 模式
-            )
+    
+    with tqdm(total=len(data)) as pbar:
+        with ThreadPoolExecutor(max_workers=args.workers) as executor:
+            # 提交所有任务
+            futures = []
+            for item in data:
+                futures.append(executor.submit(process_item, client, item, args.model, pbar))
             
-            content = response.choices[0].message.content
-            
-            try:
-                analysis = json.loads(content)
-                
-                # 合并原有字段和新生成的字段
-                new_item = item.copy()
-                new_item.update(analysis)
-                # 确保 recommended_strategy 与原始 label 一致
-                new_item['recommended_strategy'] = item['answer'] 
-                augmented_data.append(new_item)
-                
-            except json.JSONDecodeError as e:
-                print(f"Error parsing JSON content for item {item['id']}: {e}")
-                # 即使解析失败，如果内容不算太坏，也许可以手动修复或记录，这里简单跳过
-                print(f"Content was: {content[:100]}...")
-                augmented_data.append(item)
+            # 收集结果
+            for future in as_completed(futures):
+                result = future.result()
+                augmented_data.append(result)
 
-        except Exception as e:
-            print(f"Error processing {item['id']}: {e}")
-            augmented_data.append(item)
+    # 按照 id 排序一下，因为多线程返回顺序是乱的
+    # 尝试按 id 排序，如果不包含 id 则跳过
+    try:
+        augmented_data.sort(key=lambda x: x.get('id', ''))
+    except:
+        pass
 
     print(f"Saving augmented data to {args.output_file}...")
     save_json(args.output_file, augmented_data)
