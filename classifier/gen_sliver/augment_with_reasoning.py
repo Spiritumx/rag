@@ -2,25 +2,13 @@ import json
 import os
 import sys
 import argparse
+import re
 from tqdm import tqdm
 from preprocess_utils import load_json, save_json
+from openai import OpenAI
 
-# 添加项目根目录到 sys.path 以便导入 commaqa
+# 添加项目根目录到 sys.path 以便导入 preprocess_utils
 sys.path.append(os.path.join(os.path.dirname(__file__), "../../"))
-
-try:
-    from commaqa.models.gpt3generator import GPTGenerator
-except ImportError:
-    print("Warning: Could not import GPTGenerator. Please ensure commaqa package is in python path.")
-    # 定义一个假的 Generator 用于测试（如果没有安装环境）
-    class GPTGenerator:
-        def __init__(self, **kwargs): pass
-        def generate_text_sequence(self, prompt): 
-            return json.dumps({
-                "complexity_analysis": {"reasoning": "Test reasoning", "noise_risk": "Test risk"}, 
-                "search_intent": "Test intent", 
-                "rationale": "Test rationale"
-            })
 
 def construct_prompt(item):
     question = item['question']
@@ -59,30 +47,6 @@ Output ONLY the JSON object. Do not include markdown formatting.
 """
     return prompt
 
-import re
-
-def parse_llm_response(response_text, default_strategy):
-    try:
-        # 尝试清理可能的 markdown 标记
-        text = response_text.strip()
-        
-        # 使用正则表达式提取最外层的 JSON 对象
-        # 匹配从第一个 { 到最后一个 } 之间的所有内容
-        match = re.search(r'(\{.*\})', text, re.DOTALL)
-        if match:
-            text = match.group(1)
-        else:
-            # 如果没有找到 {}，可能根本不是 JSON
-            print(f"No JSON object found in response: {response_text[:50]}...")
-            return None
-            
-        data = json.loads(text)
-        return data
-    except json.JSONDecodeError as e:
-        print(f"Error parsing JSON: {e}")
-        print(f"Raw text snippet: {response_text[:100]}...")
-        return None
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_file", type=str, default="data/label.json")
@@ -93,14 +57,10 @@ def main():
 
     # 处理相对路径
     if not os.path.isabs(args.input_file):
-        # 如果是在 classifier/gen_sliver 目录下运行，需要调整路径
-        # 但通常我们假设从根目录运行或者路径是相对于当前工作目录的
-        # 这里假设用户会传入正确的相对路径，或者脚本会在项目根目录运行
         pass
 
     if not os.path.exists(args.input_file):
         print(f"Input file not found: {args.input_file}")
-        # 尝试相对于项目根目录查找（如果脚本是在子目录运行）
         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
         alt_path = os.path.join(project_root, args.input_file)
         if os.path.exists(alt_path):
@@ -121,10 +81,13 @@ def main():
         data = data[:limit_count]
         print(f"Limiting to 10% of data: {limit_count} samples.")
 
-    print(f"Initializing {args.model}...")
-    # 初始化生成器
-    # Explicitly set stop=None to avoid passing unsupported parameters to newer models like gpt-5
-    generator = GPTGenerator(model=args.model, temperature=0.7, max_tokens=500, stop=None)
+    print(f"Initializing OpenAI client for model {args.model}...")
+    
+    # 直接初始化 OpenAI 客户端，绕过 GPTGenerator
+    api_key = os.getenv("OPENAI_API_KEY") or "sk-BZQdNZeSwyih3TKpD95fDd83A90e4556A95f7eB7D489C36b"
+    base_url = os.getenv("OPENAI_BASE_URL") or "https://api.gpt.ge/v1/"
+    
+    client = OpenAI(api_key=api_key, base_url=base_url)
 
     augmented_data = []
     
@@ -132,34 +95,33 @@ def main():
     for item in tqdm(data):
         prompt = construct_prompt(item)
         
-        # 调用 LLM
         try:
-            response_data = generator.generate_text_sequence(prompt)
+            response = client.chat.completions.create(
+                model=args.model,
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant designed to output JSON."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.7,
+                response_format={"type": "json_object"} # 强制 JSON 模式
+            )
             
-            # 处理 GPTGenerator 返回的 [(text, index)] 格式
-            if isinstance(response_data, list) and len(response_data) > 0:
-                if isinstance(response_data[0], tuple):
-                    response = response_data[0][0]
-                else:
-                    response = str(response_data[0])
-            elif isinstance(response_data, str):
-                response = response_data
-            else:
-                print(f"Unexpected response format for item {item['id']}: {type(response_data)}")
-                continue
+            content = response.choices[0].message.content
             
-            # 解析响应
-            analysis = parse_llm_response(response, item['answer'])
-            
-            if analysis:
+            try:
+                analysis = json.loads(content)
+                
                 # 合并原有字段和新生成的字段
                 new_item = item.copy()
                 new_item.update(analysis)
                 # 确保 recommended_strategy 与原始 label 一致
                 new_item['recommended_strategy'] = item['answer'] 
                 augmented_data.append(new_item)
-            else:
-                print(f"Skipping item {item['id']} due to parse error.")
+                
+            except json.JSONDecodeError as e:
+                print(f"Error parsing JSON content for item {item['id']}: {e}")
+                # 即使解析失败，如果内容不算太坏，也许可以手动修复或记录，这里简单跳过
+                print(f"Content was: {content[:100]}...")
                 augmented_data.append(item)
 
         except Exception as e:
@@ -167,17 +129,8 @@ def main():
             augmented_data.append(item)
 
     print(f"Saving augmented data to {args.output_file}...")
-    
-    # 确保输出目录存在
-    if not os.path.isabs(args.output_file):
-         project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
-         # 如果是在项目根目录运行，args.output_file 可能是 "data/label_augmented.json"
-         # 如果不是绝对路径，save_json 会处理，但我们需要确保相对于执行位置是正确的
-         pass
-
     save_json(args.output_file, augmented_data)
     print("Done!")
 
 if __name__ == "__main__":
     main()
-
