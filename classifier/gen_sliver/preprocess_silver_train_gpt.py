@@ -14,7 +14,7 @@
     python classifier/gen_sliver/preprocess_silver_train_gpt.py gpt
 
 输出：
-    classifier/data/musique_hotpot_wiki2_nq_tqa_sqd/gpt/silver/label_best.json
+    data/label.json
 """
 
 import json
@@ -148,10 +148,10 @@ print("="*60)
 best_results = select_best_strategy_per_question(all_results_by_mode)
 
 # 保存结果
-output_path = os.path.join("classifier", "data", 'musique_hotpot_wiki2_nq_tqa_sqd', args.model_name, 'silver')
+output_path = "data"
 os.makedirs(output_path, exist_ok=True)
 
-output_file = os.path.join(output_path, 'label_best.json')
+output_file = os.path.join(output_path, 'label.json')
 save_json(output_file, best_results)
 
 print(f"\nGenerated {len(best_results)} labeled samples with best strategies")
