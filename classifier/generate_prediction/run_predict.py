@@ -30,6 +30,7 @@ INSTANTIATION_SCHEMES = {
     "oner_qa": {
         "bm25_retrieval_count": ["15"],
         "distractor_count": ['"1"'],
+        "retrieval_mode": ["bm25", "hnsw", "splade", "hybrid"],
     },
     "ircot": {
         "bm25_retrieval_count": ["6"],      # 修改为单个值，节省token消耗 (原本: ["4", "6", "8"])

@@ -87,6 +87,7 @@ environments:
       - conda: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/noarch/jinja2-3.1.6-pyhd8ed1ab_0.conda
       - conda: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/linux-64/jiter-0.12.0-py313h5c7d99a_0.conda
       - conda: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/noarch/joblib-1.5.2-pyhd8ed1ab_0.conda
+      - conda: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/noarch/jsonlines-4.0.0-pyhd8ed1ab_0.conda
       - conda: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/linux-64/jsonnet-0.21.0-py313h5d5ffb9_2.conda
       - conda: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/linux-64/keyutils-1.6.3-hb9d3cd8_0.conda
       - conda: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/linux-64/krb5-1.21.3-h659f571_0.conda
@@ -325,6 +326,7 @@ environments:
       - conda: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/noarch/jinja2-3.1.6-pyhd8ed1ab_0.conda
       - conda: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/win-64/jiter-0.12.0-py313hf61f64f_0.conda
       - conda: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/noarch/joblib-1.5.2-pyhd8ed1ab_0.conda
+      - conda: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/noarch/jsonlines-4.0.0-pyhd8ed1ab_0.conda
       - conda: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/win-64/jsonnet-0.21.0-py313h927ade5_2.conda
       - conda: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/win-64/krb5-1.21.3-hdf4eb48_0.conda
       - conda: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/win-64/lcms2-2.17-hbcf6048_0.conda
@@ -1805,6 +1807,17 @@ packages:
   license_family: BSD
   size: 224671
   timestamp: 1756321850584
+- conda: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/noarch/jsonlines-4.0.0-pyhd8ed1ab_0.conda
+  sha256: ba99c97cff6534f5ad5e724a074a1204e4a0c73cc8cca21a0fc2d4e92f25b89c
+  md5: df32eb56c2a48a5ca9465aef29dd46bc
+  depends:
+  - attrs >=19.2.0
+  - python >=3.6
+  - typing_extensions
+  license: BSD-3-Clause
+  license_family: BSD
+  size: 14375
+  timestamp: 1693576426176
 - conda: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/linux-64/jsonnet-0.21.0-py313h5d5ffb9_2.conda
   sha256: b5482641046d27e3bab7efc5afe6e601f6048387a7ad18e3c706b29417b2c47b
   md5: 295176b0dc9b553cab06fd8f7335dc26
