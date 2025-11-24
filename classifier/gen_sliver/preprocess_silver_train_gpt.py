@@ -90,12 +90,12 @@ for mode in available_modes:
         hotpotqa_multi_file = os.path.join("predictions", "dev_500", f'ircot_qa_{args.model_name}_hotpotqa____prompt_set_1___bm25_retrieval_count__3___distractor_count__1', 'zero_single_multi_classification__hotpotqa_to_hotpotqa__dev_500_subsampled.json')
         wikimultihopqa_multi_file = os.path.join("predictions", "dev_500", f'ircot_qa_{args.model_name}_2wikimultihopqa____prompt_set_1___bm25_retrieval_count__3___distractor_count__1', 'zero_single_multi_classification__2wikimultihopqa_to_2wikimultihopqa__dev_500_subsampled.json')
         
-        nq_one_file = os.path.join("predictions", "dev_500", f'oner_qa_{args.model_name}_nq____prompt_set_1___bm25_retrieval_count__6___distractor_count__1', 'zero_single_multi_classification__nq_to_nq__dev_500_subsampled.json')
-        trivia_one_file = os.path.join("predictions", "dev_500", f'oner_qa_{args.model_name}_trivia____prompt_set_1___bm25_retrieval_count__6___distractor_count__1', 'zero_single_multi_classification__trivia_to_trivia__dev_500_subsampled.json')
-        squad_one_file = os.path.join("predictions", "dev_500", f'oner_qa_{args.model_name}_squad____prompt_set_1___bm25_retrieval_count__6___distractor_count__1', 'zero_single_multi_classification__squad_to_squad__dev_500_subsampled.json')
-        musique_one_file = os.path.join("predictions", "dev_500", f'oner_qa_{args.model_name}_musique____prompt_set_1___bm25_retrieval_count__6___distractor_count__1', 'zero_single_multi_classification__musique_to_musique__dev_500_subsampled.json')
-        hotpotqa_one_file = os.path.join("predictions", "dev_500", f'oner_qa_{args.model_name}_hotpotqa____prompt_set_1___bm25_retrieval_count__6___distractor_count__1', 'zero_single_multi_classification__hotpotqa_to_hotpotqa__dev_500_subsampled.json')
-        wikimultihopqa_one_file = os.path.join("predictions", "dev_500", f'oner_qa_{args.model_name}_2wikimultihopqa____prompt_set_1___bm25_retrieval_count__6___distractor_count__1', 'zero_single_multi_classification__2wikimultihopqa_to_2wikimultihopqa__dev_500_subsampled.json')
+        nq_one_file = os.path.join("predictions", "dev_500", f'oner_qa_{args.model_name}_nq____prompt_set_1___bm25_retrieval_count__15___distractor_count__1', 'zero_single_multi_classification__nq_to_nq__dev_500_subsampled.json')
+        trivia_one_file = os.path.join("predictions", "dev_500", f'oner_qa_{args.model_name}_trivia____prompt_set_1___bm25_retrieval_count__15___distractor_count__1', 'zero_single_multi_classification__trivia_to_trivia__dev_500_subsampled.json')
+        squad_one_file = os.path.join("predictions", "dev_500", f'oner_qa_{args.model_name}_squad____prompt_set_1___bm25_retrieval_count__15___distractor_count__1', 'zero_single_multi_classification__squad_to_squad__dev_500_subsampled.json')
+        musique_one_file = os.path.join("predictions", "dev_500", f'oner_qa_{args.model_name}_musique____prompt_set_1___bm25_retrieval_count__15___distractor_count__1', 'zero_single_multi_classification__musique_to_musique__dev_500_subsampled.json')
+        hotpotqa_one_file = os.path.join("predictions", "dev_500", f'oner_qa_{args.model_name}_hotpotqa____prompt_set_1___bm25_retrieval_count__15___distractor_count__1', 'zero_single_multi_classification__hotpotqa_to_hotpotqa__dev_500_subsampled.json')
+        wikimultihopqa_one_file = os.path.join("predictions", "dev_500", f'oner_qa_{args.model_name}_2wikimultihopqa____prompt_set_1___bm25_retrieval_count__15___distractor_count__1', 'zero_single_multi_classification__2wikimultihopqa_to_2wikimultihopqa__dev_500_subsampled.json')
     else:
         # 新格式：带 retrieval_mode 后缀
         nq_multi_file = os.path.join("predictions", "dev_500", f'ircot_qa_{args.model_name}_nq____prompt_set_1___bm25_retrieval_count__3___distractor_count__1___retrieval_mode__{mode}', 'zero_single_multi_classification__nq_to_nq__dev_500_subsampled.json')
@@ -105,12 +105,12 @@ for mode in available_modes:
         hotpotqa_multi_file = os.path.join("predictions", "dev_500", f'ircot_qa_{args.model_name}_hotpotqa____prompt_set_1___bm25_retrieval_count__3___distractor_count__1___retrieval_mode__{mode}', 'zero_single_multi_classification__hotpotqa_to_hotpotqa__dev_500_subsampled.json')
         wikimultihopqa_multi_file = os.path.join("predictions", "dev_500", f'ircot_qa_{args.model_name}_2wikimultihopqa____prompt_set_1___bm25_retrieval_count__3___distractor_count__1___retrieval_mode__{mode}', 'zero_single_multi_classification__2wikimultihopqa_to_2wikimultihopqa__dev_500_subsampled.json')
         
-        nq_one_file = os.path.join("predictions", "dev_500", f'oner_qa_{args.model_name}_nq____prompt_set_1___bm25_retrieval_count__6___distractor_count__1___retrieval_mode__{mode}', 'zero_single_multi_classification__nq_to_nq__dev_500_subsampled.json')
-        trivia_one_file = os.path.join("predictions", "dev_500", f'oner_qa_{args.model_name}_trivia____prompt_set_1___bm25_retrieval_count__6___distractor_count__1___retrieval_mode__{mode}', 'zero_single_multi_classification__trivia_to_trivia__dev_500_subsampled.json')
-        squad_one_file = os.path.join("predictions", "dev_500", f'oner_qa_{args.model_name}_squad____prompt_set_1___bm25_retrieval_count__6___distractor_count__1___retrieval_mode__{mode}', 'zero_single_multi_classification__squad_to_squad__dev_500_subsampled.json')
-        musique_one_file = os.path.join("predictions", "dev_500", f'oner_qa_{args.model_name}_musique____prompt_set_1___bm25_retrieval_count__6___distractor_count__1___retrieval_mode__{mode}', 'zero_single_multi_classification__musique_to_musique__dev_500_subsampled.json')
-        hotpotqa_one_file = os.path.join("predictions", "dev_500", f'oner_qa_{args.model_name}_hotpotqa____prompt_set_1___bm25_retrieval_count__6___distractor_count__1___retrieval_mode__{mode}', 'zero_single_multi_classification__hotpotqa_to_hotpotqa__dev_500_subsampled.json')
-        wikimultihopqa_one_file = os.path.join("predictions", "dev_500", f'oner_qa_{args.model_name}_2wikimultihopqa____prompt_set_1___bm25_retrieval_count__6___distractor_count__1___retrieval_mode__{mode}', 'zero_single_multi_classification__2wikimultihopqa_to_2wikimultihopqa__dev_500_subsampled.json')
+        nq_one_file = os.path.join("predictions", "dev_500", f'oner_qa_{args.model_name}_nq____prompt_set_1___bm25_retrieval_count__15___distractor_count__1___retrieval_mode__{mode}', 'zero_single_multi_classification__nq_to_nq__dev_500_subsampled.json')
+        trivia_one_file = os.path.join("predictions", "dev_500", f'oner_qa_{args.model_name}_trivia____prompt_set_1___bm25_retrieval_count__15___distractor_count__1___retrieval_mode__{mode}', 'zero_single_multi_classification__trivia_to_trivia__dev_500_subsampled.json')
+        squad_one_file = os.path.join("predictions", "dev_500", f'oner_qa_{args.model_name}_squad____prompt_set_1___bm25_retrieval_count__15___distractor_count__1___retrieval_mode__{mode}', 'zero_single_multi_classification__squad_to_squad__dev_500_subsampled.json')
+        musique_one_file = os.path.join("predictions", "dev_500", f'oner_qa_{args.model_name}_musique____prompt_set_1___bm25_retrieval_count__15___distractor_count__1___retrieval_mode__{mode}', 'zero_single_multi_classification__musique_to_musique__dev_500_subsampled.json')
+        hotpotqa_one_file = os.path.join("predictions", "dev_500", f'oner_qa_{args.model_name}_hotpotqa____prompt_set_1___bm25_retrieval_count__15___distractor_count__1___retrieval_mode__{mode}', 'zero_single_multi_classification__hotpotqa_to_hotpotqa__dev_500_subsampled.json')
+        wikimultihopqa_one_file = os.path.join("predictions", "dev_500", f'oner_qa_{args.model_name}_2wikimultihopqa____prompt_set_1___bm25_retrieval_count__15___distractor_count__1___retrieval_mode__{mode}', 'zero_single_multi_classification__2wikimultihopqa_to_2wikimultihopqa__dev_500_subsampled.json')
     
     # zero 文件对所有模式都一样
     nq_zero_file = os.path.join("predictions", "dev_500", f'nor_qa_{args.model_name}_nq____prompt_set_1', 'zero_single_multi_classification__nq_to_nq__dev_500_subsampled.json')
@@ -175,5 +175,3 @@ for label in sorted(strategy_counts.keys()):
     count = strategy_counts[label]
     percentage = (count / len(best_results)) * 100
     print(f"  {label}: {count:4d} ({percentage:5.2f}%)")
-
-
