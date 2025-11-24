@@ -142,14 +142,14 @@ wait_for_slot() {
                 local dataset="${PIDS[$pid]}"
                 
                 if [[ $exit_code -eq 0 ]]; then
-                    ((COMPLETED_TASKS++))
+                    ((++COMPLETED_TASKS))
                 else
-                    ((FAILED_TASKS++))
+                    ((++FAILED_TASKS))
                     FAILED_DATASETS+=("$dataset")
                 fi
                 
                 unset PIDS[$pid]
-                ((running_count--))
+                ((running_count-=1))
             fi
         done
         
@@ -169,7 +169,7 @@ for dataset in "${datasets[@]}"; do
     run_dataset "$dataset" "$task_id" &
     pid=$!
     PIDS[$pid]="$dataset"
-    ((running_count++))
+    ((++running_count))
     
     # 稍微延迟一下，避免同时启动造成资源竞争
     sleep 1
