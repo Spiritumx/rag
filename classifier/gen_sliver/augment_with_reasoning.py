@@ -80,8 +80,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_file", type=str, default="data/label.json")
     parser.add_argument("--output_file", type=str, default="data/label_augmented.json")
-    parser.add_argument("--model", type=str, default="gpt-4o-mini", help="Model to use for generation")
-    parser.add_argument("--limit", type=int, default=-1, help="Limit number of samples for testing")
+    parser.add_argument("--model", type=str, default="gpt-5", help="Model to use for generation")
+    parser.add_argument("--limit", type=int, default=0, help="Limit number of samples for testing (0 for 10% of data, -1 for all)")
     args = parser.parse_args()
 
     # 处理相对路径
@@ -108,6 +108,11 @@ def main():
     if args.limit > 0:
         data = data[:args.limit]
         print(f"Limiting to first {args.limit} samples.")
+    elif args.limit == 0:
+        limit_count = int(len(data) * 0.1)
+        if limit_count < 1 and len(data) > 0: limit_count = 1
+        data = data[:limit_count]
+        print(f"Limiting to 10% of data: {limit_count} samples.")
 
     print(f"Initializing {args.model}...")
     # 初始化生成器
@@ -121,7 +126,19 @@ def main():
         
         # 调用 LLM
         try:
-            response = generator.generate_text_sequence(prompt)
+            response_data = generator.generate_text_sequence(prompt)
+            
+            # 处理 GPTGenerator 返回的 [(text, index)] 格式
+            if isinstance(response_data, list) and len(response_data) > 0:
+                if isinstance(response_data[0], tuple):
+                    response = response_data[0][0]
+                else:
+                    response = str(response_data[0])
+            elif isinstance(response_data, str):
+                response = response_data
+            else:
+                print(f"Unexpected response format for item {item['id']}: {type(response_data)}")
+                continue
             
             # 解析响应
             analysis = parse_llm_response(response, item['answer'])
