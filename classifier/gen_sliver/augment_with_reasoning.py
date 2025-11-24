@@ -59,21 +59,28 @@ Output ONLY the JSON object. Do not include markdown formatting.
 """
     return prompt
 
+import re
+
 def parse_llm_response(response_text, default_strategy):
     try:
         # 尝试清理可能的 markdown 标记
         text = response_text.strip()
-        if text.startswith("```json"):
-            text = text[7:]
-        if text.startswith("```"):
-            text = text[3:]
-        if text.endswith("```"):
-            text = text[:-3]
         
-        data = json.loads(text.strip())
+        # 使用正则表达式提取最外层的 JSON 对象
+        # 匹配从第一个 { 到最后一个 } 之间的所有内容
+        match = re.search(r'(\{.*\})', text, re.DOTALL)
+        if match:
+            text = match.group(1)
+        else:
+            # 如果没有找到 {}，可能根本不是 JSON
+            print(f"No JSON object found in response: {response_text[:50]}...")
+            return None
+            
+        data = json.loads(text)
         return data
-    except json.JSONDecodeError:
-        print(f"Error parsing JSON: {response_text[:50]}...")
+    except json.JSONDecodeError as e:
+        print(f"Error parsing JSON: {e}")
+        print(f"Raw text snippet: {response_text[:100]}...")
         return None
 
 def main():
