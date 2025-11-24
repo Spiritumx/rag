@@ -58,6 +58,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG_DIR="${SCRIPT_DIR}/logs_oner_qa"
 mkdir -p "$LOG_DIR"
 
+# 切换到脚本所在目录，确保 runner.py 能找到 run.py
+cd "$SCRIPT_DIR"
+
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 MAIN_LOG="${LOG_DIR}/main_${TIMESTAMP}.log"
 
@@ -212,7 +215,7 @@ fi
 
 echo "✓ 所有 oner_qa 数据集处理完成！" | tee -a "$MAIN_LOG"
 echo "" | tee -a "$MAIN_LOG"
-echo "预测文件位置: classifier/generate_prediction/predictions/dev_500/" | tee -a "$MAIN_LOG"
+echo "预测文件位置: ${SCRIPT_DIR}/predictions/dev_500/" | tee -a "$MAIN_LOG"
 echo "现在每个数据集应该有4种检索模式的预测结果（bm25, hnsw, splade, hybrid）" | tee -a "$MAIN_LOG"
 echo "==========================================================" | tee -a "$MAIN_LOG"
 
