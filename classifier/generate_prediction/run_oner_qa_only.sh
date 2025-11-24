@@ -113,8 +113,8 @@ run_dataset() {
     echo "  -> 运行评估..." >> "$log_file"
     if ! python "${SCRIPT_DIR}/runner.py" oner_qa "$MODEL" "$dataset" evaluate \
         --prompt_set 1 --sample_size 500 --llm_port_num "$LLM_PORT" >> "$log_file" 2>&1; then
-        echo "[$task_id/$TOTAL_TASKS] ✗ 失败: $dataset (评估失败)" | tee -a "$MAIN_LOG"
-        return 1
+        echo "[$task_id/$TOTAL_TASKS] ⚠ 警告: $dataset (评估失败，忽略)" | tee -a "$MAIN_LOG"
+        # return 1  # 不再因为评估失败而中断
     fi
     
     # 第4步: 汇总
