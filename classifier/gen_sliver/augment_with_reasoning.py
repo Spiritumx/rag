@@ -37,6 +37,19 @@ Question: "{question}"
 Optimal Strategy: {strategy} ({desc})
 
 Please provide a detailed analysis in valid JSON format with the following fields:
+
+Example Output Structure:
+{
+    "complexity_analysis": {
+        "reasoning": "The question asks for a specific entity attribute that requires reasoning across multiple documents...",
+        "noise_risk": "Simple keyword search might retrieve irrelevant entities with similar names..."
+    },
+    "search_intent": "Entity1 <relation> Entity2; Entity2 <attribute> Value",
+    "recommended_strategy": "M1",
+    "rationale": "Multi-hop retrieval is needed to bridge the gap between Entity1 and the target value."
+}
+
+Fields description:
 1. "complexity_analysis": Object containing:
    - "reasoning": Why this question requires this specific strategy (e.g., factoid, multi-hop, specific entity attributes).
    - "noise_risk": What could go wrong if we used a simpler or different strategy (e.g., keyword matching noise, missing bridge entities).
