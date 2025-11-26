@@ -104,42 +104,49 @@ JSON List:
 }
 
 def generate_batch(client, model, prompt_key, domain):
-    """调用 LLM 生成一批数据"""
+    """调用 LLM 生成一批数据，带重试机制"""
     prompt_template = PROMPTS[prompt_key]
     prompt = prompt_template.format(domain=domain)
     
-    try:
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant designed to output JSON list."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.8, # 稍微增加温度以提高多样性
-            response_format={"type": "json_object"}
-        )
-        content = response.choices[0].message.content
-        
-        # 简单的清洗
-        if "```json" in content:
-            content = content.replace("```json", "").replace("```", "")
-        
-        data = json.loads(content)
-        
-        # 兼容有时候模型返回 {"items": [...]} 或者直接 [...] 
-        if isinstance(data, dict):
-            for k, v in data.items():
-                if isinstance(v, list):
-                    return v
-            return [] # 没找到 list
-        elif isinstance(data, list):
-            return data
-        else:
-            return []
+    max_retries = 3
+    base_delay = 2
 
-    except Exception as e:
-        print(f"Error generating batch for {prompt_key} in {domain}: {e}")
-        return []
+    for attempt in range(max_retries):
+        try:
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant designed to output JSON list."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.8, # 稍微增加温度以提高多样性
+                response_format={"type": "json_object"}
+            )
+            content = response.choices[0].message.content
+            
+            # 简单的清洗
+            if "```json" in content:
+                content = content.replace("```json", "").replace("```", "")
+            
+            data = json.loads(content)
+            
+            # 兼容有时候模型返回 {"items": [...]} 或者直接 [...] 
+            if isinstance(data, dict):
+                for k, v in data.items():
+                    if isinstance(v, list):
+                        return v
+                return [] # 没找到 list
+            elif isinstance(data, list):
+                return data
+            else:
+                return []
+
+        except Exception as e:
+            print(f"Error generating batch for {prompt_key} in {domain} (Attempt {attempt+1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                time.sleep(base_delay * (attempt + 1)) # 指数退避
+            else:
+                return []
 
 def transform_to_schema(raw_item, index, strategy_prefix):
     """将生成的简化数据转换为项目标准格式"""
