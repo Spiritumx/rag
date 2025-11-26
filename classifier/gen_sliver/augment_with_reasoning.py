@@ -111,19 +111,28 @@ def main():
     parser.add_argument("--workers", type=int, default=2, help="Number of parallel workers")
     args = parser.parse_args()
 
-    # 处理相对路径
-    if not os.path.isabs(args.input_file):
-        pass
+    # 获取项目根目录
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
 
-    if not os.path.exists(args.input_file):
-        print(f"Input file not found: {args.input_file}")
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
-        alt_path = os.path.join(project_root, args.input_file)
-        if os.path.exists(alt_path):
-            print(f"Found file at {alt_path}")
-            args.input_file = alt_path
-        else:
-            return
+    # 处理 input_file 路径
+    if not os.path.isabs(args.input_file):
+        # 尝试在当前目录下查找
+        if not os.path.exists(args.input_file):
+            # 尝试在项目根目录下查找
+            alt_path = os.path.join(project_root, args.input_file)
+            if os.path.exists(alt_path):
+                print(f"Found input file at {alt_path}")
+                args.input_file = alt_path
+            else:
+                print(f"Input file not found: {args.input_file}")
+                # 虽然没找到，但保留原值让后续 load_json 报错或处理
+    
+    # 处理 output_file 路径 - 强制相对于项目根目录（如果不是绝对路径）
+    if not os.path.isabs(args.output_file):
+        args.output_file = os.path.join(project_root, args.output_file)
+    
+    # 确保输出目录存在
+    os.makedirs(os.path.dirname(args.output_file), exist_ok=True)
 
     print(f"Loading data from {args.input_file}...")
     data = load_json(args.input_file)

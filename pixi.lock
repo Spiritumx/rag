@@ -168,7 +168,7 @@ environments:
       - conda: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/noarch/networkx-3.5-pyhe01879c_0.conda
       - conda: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/linux-64/nlohmann_json-3.12.0-h54a6638_1.conda
       - conda: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/linux-64/numpy-2.3.4-py313hf6604e3_0.conda
-      - conda: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/noarch/openai-2.7.1-pyhd8ed1ab_0.conda
+      - conda: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/noarch/openai-2.8.1-pyhd8ed1ab_0.conda
       - conda: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/linux-64/openjpeg-2.5.4-h55fea9a_0.conda
       - conda: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/linux-64/openssl-3.5.4-h26f9b46_0.conda
       - conda: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/linux-64/optree-0.17.0-py313h7037e92_1.conda
@@ -389,7 +389,7 @@ environments:
       - conda: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/win-64/multiprocess-0.70.18-py313h5fd188c_1.conda
       - conda: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/noarch/networkx-3.5-pyhe01879c_0.conda
       - conda: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/win-64/numpy-2.3.4-py313hce7ae62_0.conda
-      - conda: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/noarch/openai-2.7.1-pyhd8ed1ab_0.conda
+      - conda: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/noarch/openai-2.8.1-pyhd8ed1ab_0.conda
       - conda: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/win-64/openjpeg-2.5.4-h24db6dd_0.conda
       - conda: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/win-64/openssl-3.5.4-h725018a_0.conda
       - conda: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/win-64/optree-0.17.0-py313hf069bd2_1.conda
@@ -3691,9 +3691,9 @@ packages:
   license_family: BSD
   size: 7461895
   timestamp: 1761161591941
-- conda: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/noarch/openai-2.7.1-pyhd8ed1ab_0.conda
-  sha256: 5f9d547106943cd2e4eb2ce42dad8cb31b1dd211bfe0ad0e4bc57d77e65dffa2
-  md5: 0d391e04056b6c73179d5595226a8f4f
+- conda: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/noarch/openai-2.8.1-pyhd8ed1ab_0.conda
+  sha256: 616b8a5e049241f6d2c511a28757b0779fce7be20db826db0ed2f07b58307684
+  md5: 42f8f1402daf8dbbcad70924b96238b3
   depends:
   - anyio >=3.5.0,<5
   - distro >=1.7.0,<2
@@ -3707,8 +3707,8 @@ packages:
   - typing_extensions >=4.11,<5
   license: MIT
   license_family: MIT
-  size: 371524
-  timestamp: 1762239945452
+  size: 375845
+  timestamp: 1763435012326
 - conda: https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/linux-64/openjpeg-2.5.4-h55fea9a_0.conda
   sha256: 3900f9f2dbbf4129cf3ad6acf4e4b6f7101390b53843591c53b00f034343bc4d
   md5: 11b3379b191f63139e29c0d19dee24cd
