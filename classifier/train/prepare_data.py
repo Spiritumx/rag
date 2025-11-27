@@ -9,7 +9,8 @@ from datasets import Dataset, DatasetDict
 # 路径配置
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
 INPUT_FILE = os.path.join(PROJECT_ROOT, "classifier", "data", "label_balanced.json")
-OUTPUT_DIR = os.path.join(PROJECT_ROOT, "classifier", "train", "data")
+# OUTPUT_DIR = os.path.join(PROJECT_ROOT, "classifier", "train", "data")
+OUTPUT_DIR = "/autodl-tmp/data"
 
 def format_instruction(item):
     """

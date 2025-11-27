@@ -9,11 +9,11 @@ from transformers import TrainingArguments, DataCollatorForSeq2Seq
 # --- 配置 ---
 # 尝试从项目根目录加载本地模型，如果失败则使用 HF Hub
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
-LOCAL_MODEL_PATH = os.path.join(PROJECT_ROOT, "classifier", "model", "Qwen2.5-3B-Instruct")
+LOCAL_MODEL_PATH = "/autodl-tmp/model/Qwen2.5-3B-Instruct"
 MODEL_NAME = LOCAL_MODEL_PATH if os.path.exists(LOCAL_MODEL_PATH) else "Qwen/Qwen2.5-3B-Instruct"
 
-DATA_DIR = os.path.join(PROJECT_ROOT, "classifier", "train", "data")
-OUTPUT_DIR = os.path.join(PROJECT_ROOT, "classifier", "train", "output")
+DATA_DIR = "/autodl-tmp/data"
+OUTPUT_DIR = "/autodl-tmp/output"
 
 MAX_SEQ_LENGTH = 2048 # Qwen2.5 支持更长，但分类任务通常不长，2048足够
 DTYPE = torch.bfloat16 # None for auto detection. Float16 for Tesla T4, V100, Bfloat16 for Ampere+

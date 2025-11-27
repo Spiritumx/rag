@@ -13,7 +13,6 @@ version = "0.1.0"
 index-url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple"
 extra-index-urls = [
     "https://mirrors.aliyun.com/pypi/simple/",
-    "https://download.pytorch.org/whl/cu128"
 ]
 
 [tasks]
