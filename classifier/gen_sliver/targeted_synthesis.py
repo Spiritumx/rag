@@ -171,8 +171,8 @@ def transform_to_schema(raw_item, index, strategy_prefix):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input_file", type=str, default="data/label_augmented.json")
-    parser.add_argument("--output_file", type=str, default="data/label_balanced.json")
+    parser.add_argument("--input_file", type=str, default="classifier/data/label_augmented.json")
+    parser.add_argument("--output_file", type=str, default="classifier/data/label_balanced.json")
     parser.add_argument("--model", type=str, default="gpt-4o")
     parser.add_argument("--workers", type=int, default=5)
     args = parser.parse_args()

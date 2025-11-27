@@ -104,8 +104,8 @@ def process_item(client, item, model, pbar=None):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input_file", type=str, default="data/label.json")
-    parser.add_argument("--output_file", type=str, default="data/label_augmented.json")
+    parser.add_argument("--input_file", type=str, default="classifier/data/label.json")
+    parser.add_argument("--output_file", type=str, default="classifier/data/label_augmented.json")
     parser.add_argument("--model", type=str, default="gpt-4o", help="Model to use for generation")
     parser.add_argument("--limit", type=int, default=0, help="Limit number of samples for testing (0 for 10% of data, -1 for all)")
     parser.add_argument("--workers", type=int, default=2, help="Number of parallel workers")
@@ -116,16 +116,19 @@ def main():
 
     # 处理 input_file 路径
     if not os.path.isabs(args.input_file):
-        # 尝试在当前目录下查找
-        if not os.path.exists(args.input_file):
-            # 尝试在项目根目录下查找
-            alt_path = os.path.join(project_root, args.input_file)
-            if os.path.exists(alt_path):
-                print(f"Found input file at {alt_path}")
-                args.input_file = alt_path
+        # 尝试在项目根目录下查找
+        alt_path = os.path.join(project_root, args.input_file)
+        if os.path.exists(alt_path):
+            print(f"Found input file at {alt_path}")
+            args.input_file = alt_path
+        else:
+            # 兼容旧路径 data/label.json (如果还在那里)
+            old_path = os.path.join(project_root, "data", os.path.basename(args.input_file))
+            if os.path.exists(old_path):
+                print(f"Found input file at legacy path {old_path}")
+                args.input_file = old_path
             else:
                 print(f"Input file not found: {args.input_file}")
-                # 虽然没找到，但保留原值让后续 load_json 报错或处理
     
     # 处理 output_file 路径 - 强制相对于项目根目录（如果不是绝对路径）
     if not os.path.isabs(args.output_file):
