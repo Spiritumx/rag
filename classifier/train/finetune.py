@@ -28,12 +28,12 @@ def main():
         os.environ["HF_HUB_OFFLINE"] = "1"
         print("Using local model and offline mode.")
         # Manually load config to avoid unsloth/transformers bug with local_files_only dict handling
-        config = AutoConfig.from_pretrained(MODEL_NAME)
-        extra_kwargs["config"] = config
+        # config = AutoConfig.from_pretrained(MODEL_NAME)
+        # extra_kwargs["config"] = config
     
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name = MODEL_NAME,
-        max_seq_length = None, # Set to None to use model's config and avoid TypeError with max_position_embeddings
+        max_seq_length = MAX_SEQ_LENGTH,
         dtype = DTYPE,
         load_in_4bit = LOAD_IN_4BIT,
         **extra_kwargs,
@@ -73,8 +73,8 @@ def main():
     # 训练参数
     training_args = TrainingArguments(
         output_dir = OUTPUT_DIR,
-        per_device_train_batch_size = 16, # 根据显存调整，5090可以尝试 8 或 16
-        gradient_accumulation_steps = 2,
+        per_device_train_batch_size = 32, # 根据显存调整，5090可以尝试 8 或 16
+        gradient_accumulation_steps = 1,
         warmup_steps = 10,
         max_steps = 0, # Set to 0 to use num_train_epochs
         num_train_epochs = 3, 
