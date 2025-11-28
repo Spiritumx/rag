@@ -1,6 +1,7 @@
 import torch
 import os
 import sys
+os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 from unsloth import FastLanguageModel
 from datasets import load_from_disk
 from trl import SFTTrainer
