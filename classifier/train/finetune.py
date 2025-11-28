@@ -33,7 +33,7 @@ def main():
     
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name = MODEL_NAME,
-        max_seq_length = MAX_SEQ_LENGTH,
+        max_seq_length = None, # Set to None to use model's config and avoid TypeError with max_position_embeddings
         dtype = DTYPE,
         load_in_4bit = LOAD_IN_4BIT,
         **extra_kwargs,
