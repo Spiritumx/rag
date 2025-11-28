@@ -4,7 +4,7 @@ import sys
 from unsloth import FastLanguageModel
 from datasets import load_from_disk
 from trl import SFTTrainer
-from transformers import TrainingArguments, DataCollatorForSeq2Seq
+from transformers import TrainingArguments, DataCollatorForSeq2Seq, AutoConfig
 
 # --- 配置 ---
 # 尝试从项目根目录加载本地模型，如果失败则使用 HF Hub
@@ -27,6 +27,9 @@ def main():
         extra_kwargs["local_files_only"] = True
         os.environ["HF_HUB_OFFLINE"] = "1"
         print("Using local model and offline mode.")
+        # Manually load config to avoid unsloth/transformers bug with local_files_only dict handling
+        config = AutoConfig.from_pretrained(MODEL_NAME)
+        extra_kwargs["config"] = config
     
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name = MODEL_NAME,
