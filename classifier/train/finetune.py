@@ -5,7 +5,7 @@ os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 from unsloth import FastLanguageModel
 from datasets import load_from_disk
 from trl import SFTTrainer
-from transformers import TrainingArguments, DataCollatorForSeq2Seq, AutoConfig
+from transformers import TrainingArguments, AutoTokenizer
 
 # --- 配置 ---
 # 尝试从项目根目录加载本地模型，如果失败则使用 HF Hub
@@ -28,12 +28,20 @@ def main():
         print("Using local model and offline mode.")
         # Manually load config to avoid unsloth/transformers bug with local_files_only dict handling
     
-    model, tokenizer = FastLanguageModel.from_pretrained(
+    model, _ = FastLanguageModel.from_pretrained(
         model_name = MODEL_NAME,
         max_seq_length = MAX_SEQ_LENGTH,
         dtype = DTYPE,
         load_in_4bit = LOAD_IN_4BIT,
+        fix_tokenizer = False,
+        **extra_kwargs,
     )
+     # 2. 手动加载 Tokenizer (使用官方 Transformers 方式，这就不会报错了)
+    print("Loading tokenizer manually...")
+    tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+    tokenizer.padding_side = "right" # 训练时通常用 right padding (Unsloth 默认也是 right)
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
 
     # 配置 LoRA
     model = FastLanguageModel.get_peft_model(
