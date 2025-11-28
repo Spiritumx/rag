@@ -24,19 +24,14 @@ def main():
     
     extra_kwargs = {}
     if os.path.exists(MODEL_NAME):
-        extra_kwargs["local_files_only"] = True
-        os.environ["HF_HUB_OFFLINE"] = "1"
         print("Using local model and offline mode.")
         # Manually load config to avoid unsloth/transformers bug with local_files_only dict handling
-        # config = AutoConfig.from_pretrained(MODEL_NAME)
-        # extra_kwargs["config"] = config
     
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name = MODEL_NAME,
         max_seq_length = MAX_SEQ_LENGTH,
         dtype = DTYPE,
         load_in_4bit = LOAD_IN_4BIT,
-        **extra_kwargs,
     )
 
     # 配置 LoRA
