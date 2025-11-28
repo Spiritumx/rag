@@ -22,11 +22,18 @@ LOAD_IN_4BIT = False # 使用 4bit 量化加载以节省显存
 def main():
     print(f"Loading model from {MODEL_NAME}...")
     
+    extra_kwargs = {}
+    if os.path.exists(MODEL_NAME):
+        extra_kwargs["local_files_only"] = True
+        os.environ["HF_HUB_OFFLINE"] = "1"
+        print("Using local model and offline mode.")
+    
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name = MODEL_NAME,
         max_seq_length = MAX_SEQ_LENGTH,
         dtype = DTYPE,
         load_in_4bit = LOAD_IN_4BIT,
+        **extra_kwargs,
     )
 
     # 配置 LoRA
