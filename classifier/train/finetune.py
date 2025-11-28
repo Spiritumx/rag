@@ -80,7 +80,6 @@ def main():
         per_device_train_batch_size = 32, # 根据显存调整，5090可以尝试 8 或 16
         gradient_accumulation_steps = 1,
         warmup_steps = 10,
-        max_steps = 0, # Set to 0 to use num_train_epochs
         num_train_epochs = 3, 
         learning_rate = 2e-4,
         fp16 = not torch.cuda.is_bf16_supported(),
