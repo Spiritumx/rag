@@ -87,7 +87,7 @@ unsloth = "*"
 # unsloth = { git = "https://github.com/unslothai/unsloth.git" } # 有时 git 版反而兼容性好点，视情况而定
 
 # 其他辅助库
-transformers = "*"
+transformers = "<=4.57.1" 
 datasets = "==4.3.0" # 保持版本一致，防止逻辑差异
 peft = "*"
 accelerate = "*"
