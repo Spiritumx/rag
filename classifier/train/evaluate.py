@@ -1,5 +1,8 @@
-import torch
 import os
+# 禁用 Unsloth 统计检查，避免 401 错误
+os.environ["UNSLOTH_DISABLE_STATISTICS"] = "1"
+
+import torch
 import re
 from unsloth import FastLanguageModel
 from datasets import load_from_disk
