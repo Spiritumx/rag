@@ -1,4 +1,6 @@
 import os
+# 设置 HF 镜像源（与 finetune.py 保持一致）
+os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 # 禁用 Unsloth 统计检查，避免 401 错误
 os.environ["UNSLOTH_DISABLE_STATISTICS"] = "1"
 
@@ -67,23 +69,19 @@ def evaluate():
 
     if is_merged:
         # 合并后的模型直接使用 transformers 加载，避免 Unsloth 的兼容性问题
-        from transformers import AutoModelForCausalLM, AutoTokenizer
+        from transformers import AutoModelForCausalLM
         print("使用 transformers 直接加载合并后的模型...")
 
-        # 从基础模型加载 tokenizer（避免 config 兼容性问题）
+        # 从基础模型加载 tokenizer（模仿 finetune.py 的方式）
         print(f"从基础模型加载 tokenizer: {BASE_MODEL_NAME}")
-        tokenizer = AutoTokenizer.from_pretrained(
-            BASE_MODEL_NAME,
-            trust_remote_code=True
-        )
+        tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL_NAME)  # 不添加任何额外参数
 
         # 从合并模型加载权重
         print(f"从合并模型加载权重: {model_path}")
         model = AutoModelForCausalLM.from_pretrained(
             model_path,
             torch_dtype=DTYPE,
-            device_map="cuda",
-            trust_remote_code=True
+            device_map="cuda"
         )
         model.eval()  # 设置为推理模式
     else:
