@@ -65,13 +65,32 @@ def evaluate():
     print(f"\n正在加载模型: {model_path}")
     print(f"模型类型: {'合并模型' if is_merged else 'LoRA 适配器'}")
 
-    model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name = model_path,
-        max_seq_length = MAX_SEQ_LENGTH,
-        dtype = DTYPE,
-        load_in_4bit = LOAD_IN_4BIT,
-    )
-    FastLanguageModel.for_inference(model)
+    if is_merged:
+        # 合并后的模型直接使用 transformers 加载，避免 Unsloth 的兼容性问题
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+        print("使用 transformers 直接加载合并后的模型...")
+
+        tokenizer = AutoTokenizer.from_pretrained(
+            model_path,
+            trust_remote_code=True
+        )
+        model = AutoModelForCausalLM.from_pretrained(
+            model_path,
+            torch_dtype=DTYPE,
+            device_map="cuda",
+            trust_remote_code=True
+        )
+        model.eval()  # 设置为推理模式
+    else:
+        # LoRA 适配器使用 Unsloth 加载
+        model, tokenizer = FastLanguageModel.from_pretrained(
+            model_name = model_path,
+            max_seq_length = MAX_SEQ_LENGTH,
+            dtype = DTYPE,
+            load_in_4bit = LOAD_IN_4BIT,
+        )
+        FastLanguageModel.for_inference(model)
+
     print("✓ 模型加载完成\n")
 
     # 2. 加载测试集
