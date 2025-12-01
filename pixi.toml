@@ -2,7 +2,6 @@
 channels = [
     "https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/",
     "nvidia",
-    "conda-forge",
 ]
 name = "graduateRAG"
 # 【关键修改1】加回 win-64 支持
@@ -12,7 +11,7 @@ version = "0.1.0"
 [pypi-options]
 index-url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple"
 extra-index-urls = [
-    "https://mirrors.aliyun.com/pypi/simple/",
+    "https://pypi.tuna.tsinghua.edu.cn/simple",
 ]
 
 [tasks]
@@ -53,15 +52,14 @@ cuda-toolkit = "13.0.*"
 # 这里的配置和你刚才在服务器上跑通的一模一样
 torch = { version = "==2.9.0", index = "https://download.pytorch.org/whl/cu130" }
 torchvision = { version = "==0.24.0", index = "https://download.pytorch.org/whl/cu130" }
-torchaudio = { version = "*", index = "https://download.pytorch.org/whl/cu130" }
 xformers = { version = ">=0.0.33", index = "https://download.pytorch.org/whl/cu130" }
 # Unsloth 使用 Git 源码版以支持 Blackwell
-unsloth = { git = "https://github.com/unslothai/unsloth.git", branch = "main" }
+unsloth = "<2025.11.5"
 unsloth_zoo = "*"
 bitsandbytes = ">=0.45.0"
 trl = ">=0.24.0"
 datasets = "==4.3.0"
-transformers = "*"
+transformers = "<=4.57.1"
 peft = "*"
 accelerate = "*"
 sentence-transformers = "*"
@@ -87,7 +85,7 @@ unsloth = "*"
 # unsloth = { git = "https://github.com/unslothai/unsloth.git" } # 有时 git 版反而兼容性好点，视情况而定
 
 # 其他辅助库
-transformers = "<=4.57.1" 
+transformers = "*"
 datasets = "==4.3.0" # 保持版本一致，防止逻辑差异
 peft = "*"
 accelerate = "*"
