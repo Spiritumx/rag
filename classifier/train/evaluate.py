@@ -70,10 +70,15 @@ def evaluate():
         from transformers import AutoModelForCausalLM, AutoTokenizer
         print("使用 transformers 直接加载合并后的模型...")
 
+        # 从基础模型加载 tokenizer（避免 config 兼容性问题）
+        print(f"从基础模型加载 tokenizer: {BASE_MODEL_NAME}")
         tokenizer = AutoTokenizer.from_pretrained(
-            model_path,
+            BASE_MODEL_NAME,
             trust_remote_code=True
         )
+
+        # 从合并模型加载权重
+        print(f"从合并模型加载权重: {model_path}")
         model = AutoModelForCausalLM.from_pretrained(
             model_path,
             torch_dtype=DTYPE,
