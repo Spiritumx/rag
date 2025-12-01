@@ -5,3 +5,4 @@ retriever_server/model/*
 # pixi environments
 .pixi/*
 !.pixi/config.toml
+pixi.lock

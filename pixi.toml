@@ -2,13 +2,13 @@
 channels = [
     "https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/",
     "nvidia",
-    "pytorch",
-    "conda-forge"
-    ]
-
+    "conda-forge",
+]
 name = "graduateRAG"
-platforms = ["win-64", "linux-64"]
+# 【关键修改1】加回 win-64 支持
+platforms = ["linux-64", "win-64"]
 version = "0.1.0"
+
 [pypi-options]
 index-url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple"
 extra-index-urls = [
@@ -18,11 +18,15 @@ extra-index-urls = [
 [tasks]
 
 [system-requirements]
-cuda = "12.8"
+cuda = "13.0"
 
 [dependencies]
-pytorch-gpu = "*"
-cuda-version = "12.8.*"
+python = ">=3.11,<3.13"
+# 移除全局 cuda 版本限制，避免 Windows 上报错
+# cuda-version = "13.0.*" 
+# cuda-toolkit = "13.0.*"
+cudnn = "*"
+# 下面是你的通用库，两边都装
 jsonnet = ">=0.21.0,<0.22"
 rapidfuzz = ">=3.14.1,<4"
 requests = ">=2.32.5,<3"
@@ -37,10 +41,54 @@ pandas = ">=2.3.3,<3"
 diskcache = ">=5.6.3,<6"
 fastapi = ">=0.121.2,<0.122"
 jsonlines = ">=4.0.0,<5"
+# 解决 datasets 依赖冲突的通用配置
+fsspec = "<=2025.9.0"
 
-[pypi-dependencies]
-unsloth = "*"
-bitsandbytes = "*"
-trl = ">=0.25.1,<0.26"
+# --- Linux (RTX 5090) 专用配置 ---
+[target.linux-64.dependencies]
+cuda-version = "13.0.*"
+cuda-toolkit = "13.0.*"
+
+[target.linux-64.pypi-dependencies]
+# 这里的配置和你刚才在服务器上跑通的一模一样
+torch = { version = "==2.9.0", index = "https://download.pytorch.org/whl/cu130" }
+torchvision = { version = "==0.24.0", index = "https://download.pytorch.org/whl/cu130" }
+torchaudio = { version = "*", index = "https://download.pytorch.org/whl/cu130" }
+xformers = { version = ">=0.0.33", index = "https://download.pytorch.org/whl/cu130" }
+# Unsloth 使用 Git 源码版以支持 Blackwell
+unsloth = { git = "https://github.com/unslothai/unsloth.git", branch = "main" }
+unsloth_zoo = "*"
+bitsandbytes = ">=0.45.0"
+trl = ">=0.24.0"
+datasets = "==4.3.0"
 transformers = "*"
+peft = "*"
+accelerate = "*"
 sentence-transformers = "*"
+triton = "*"
+
+# 仅在 Linux 上注入 LD_LIBRARY_PATH
+[target.linux-64.activation]
+env = { LD_LIBRARY_PATH = "$LD_LIBRARY_PATH:$PIXI_PROJECT_ROOT/.pixi/envs/default/lib/python3.12/site-packages/nvidia/cuda_runtime/lib:$PIXI_PROJECT_ROOT/.pixi/envs/default/lib/python3.12/site-packages/nvidia/cublas/lib:$PIXI_PROJECT_ROOT/.pixi/envs/default/lib/python3.12/site-packages/nvidia/cudnn/lib" }
+
+
+# --- Windows (开发/修Bug) 专用配置 ---
+[target.win-64.pypi-dependencies]
+# Windows 上我们只求“能跑”，不需要 cu130 这种变态版本
+# 使用 * 让 pip 自动找最适合你 Windows 显卡(或CPU)的版本
+torch = "*"
+torchvision = "*"
+torchaudio = "*"
+
+# Windows 上安装 unsloth 可能会有编译困难，
+# 如果你只是修代码逻辑，安装 PyPI 上的标准版即可满足 import 检查
+unsloth = "*" 
+# 如果 unsloth 在 Windows 上安装失败，可以注释掉上面那行，改用下面这行假装安装：
+# unsloth = { git = "https://github.com/unslothai/unsloth.git" } # 有时 git 版反而兼容性好点，视情况而定
+
+# 其他辅助库
+transformers = "*"
+datasets = "==4.3.0" # 保持版本一致，防止逻辑差异
+peft = "*"
+accelerate = "*"
+bitsandbytes = "*" # Windows 版 bitsandbytes 比较特殊，如果安装失败，可能需要找专门的 win wheel，但修代码通常不需要加载量化模型
