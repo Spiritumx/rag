@@ -28,6 +28,18 @@ echo ""
 # 切换到项目根目录
 cd "$PROJECT_ROOT"
 
+# 清除 Unsloth 编译缓存（解决 logits 问题）
+CACHE_DIR="$PROJECT_ROOT/unsloth_compiled_cache"
+if [ -d "$CACHE_DIR" ]; then
+    echo ""
+    echo -e "${YELLOW}🧹 清除 Unsloth 编译缓存...${NC}"
+    rm -rf "$CACHE_DIR"
+    echo -e "${GREEN}✅ 缓存清除成功！${NC}"
+else
+    echo ""
+    echo "📝 Unsloth 缓存目录不存在，跳过清理"
+fi
+
 # 函数: 执行单个脚本
 run_script() {
     local step=$1
