@@ -59,7 +59,16 @@ class BalancedSFTTrainer(SFTTrainer):
         重写损失计算，使用类别加权的交叉熵
         """
         # 先调用原始的 forward 得到 logits
-        outputs = model(**inputs)
+        # 对于 Unsloth 2024.11+，需要明确设置 return_dict=True 和 output_hidden_states=False
+        outputs = model(**inputs, return_dict=True, use_cache=False)
+
+        # 检查是否有 logits 属性
+        if not hasattr(outputs, 'logits') or outputs.logits is None:
+            raise RuntimeError(
+                "模型输出中没有 logits！请确保在脚本开头设置了: "
+                "os.environ['UNSLOTH_RETURN_LOGITS'] = '1'"
+            )
+
         logits = outputs.logits
         labels = inputs["labels"]
 
