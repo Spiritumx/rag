@@ -1,7 +1,11 @@
 import torch
 import os
 import sys
+
+# 设置环境变量（必须在导入 unsloth 之前）
 os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
+os.environ["UNSLOTH_RETURN_LOGITS"] = "1"  # 启用 logits 返回（自定义 loss 需要）
+
 from unsloth import FastLanguageModel
 from datasets import load_from_disk
 from trl import SFTTrainer
@@ -278,9 +282,6 @@ def main():
         class_weights = class_weights,  # 传入类别权重
         label_token_ids = label_token_ids,  # 传入标签 token ID 映射
     )
-
-    # 设置 Unsloth 返回 logits（自定义 loss 需要）
-    os.environ['UNSLOTH_RETURN_LOGITS'] = '1'
 
     print("Starting training...")
     trainer_stats = trainer.train()
