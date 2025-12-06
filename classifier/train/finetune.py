@@ -285,7 +285,7 @@ def main():
         train_dataset = dataset["train"],
         eval_dataset = dataset["test"],
         dataset_text_field = "text",
-        packing = True, # Can make training 5x faster for short sequences.
+        packing = False,  # 禁用 packing，避免与 flash attention 的兼容性问题
         args = training_args,
         class_weights = class_weights,  # 传入类别权重
         label_token_ids = label_token_ids,  # 传入标签 token ID 映射
