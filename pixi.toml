@@ -51,7 +51,7 @@ torch = { version = "==2.9.0", index = "https://download.pytorch.org/whl/cu130" 
 torchvision = { version = "==0.24.0", index = "https://download.pytorch.org/whl/cu130" }
 xformers = { version = ">=0.0.33", index = "https://download.pytorch.org/whl/cu130" }
 # Unsloth 使用 Git 源码版以支持 Blackwell
-unsloth = "<2025.11.5"
+unsloth = "<=2025.3.10"
 unsloth_zoo = "*"
 bitsandbytes = ">=0.45.0"
 trl = ">=0.24.0"
@@ -82,3 +82,6 @@ datasets = "==4.3.0"
 peft = "*"
 accelerate = "*"
 bitsandbytes = "*"
+
+[activation.env]
+UNSLOTH_RETURN_LOGITS = "1"

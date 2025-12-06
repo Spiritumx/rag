@@ -4,7 +4,8 @@ import sys
 
 # 设置环境变量（必须在导入 unsloth 之前）
 os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
-os.environ["UNSLOTH_RETURN_LOGITS"] = "1"  # 启用 logits 返回（自定义 loss 需要）
+# 注意：旧版本 Unsloth (2025.1.x) 默认返回 logits，不需要设置这个环境变量
+os.environ["UNSLOTH_RETURN_LOGITS"] = "1"  # 仅 2024.11+ 版本需要
 
 from unsloth import FastLanguageModel
 from datasets import load_from_disk
@@ -284,8 +285,6 @@ def main():
         train_dataset = dataset["train"],
         eval_dataset = dataset["test"],
         dataset_text_field = "text",
-        max_seq_length = MAX_SEQ_LENGTH,
-        dataset_num_proc = 2,
         packing = True, # Can make training 5x faster for short sequences.
         args = training_args,
         class_weights = class_weights,  # 传入类别权重
