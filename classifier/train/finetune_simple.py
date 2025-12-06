@@ -119,7 +119,7 @@ def main():
         seed = 3407,
         save_strategy = "epoch",
         save_total_limit = 2,
-        evaluation_strategy = "epoch",  # 每个 epoch 评估一次
+        # eval_strategy = "epoch",  # 移除：某些版本不支持
     )
 
     # 6. 创建 Trainer（使用标准 SFTTrainer，不使用类别权重）
