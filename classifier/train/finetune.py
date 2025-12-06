@@ -19,18 +19,19 @@ import json
 # 直接修改 unsloth 内部变量来绕过环境变量检查
 try:
     import unsloth.models._utils as unsloth_utils
-    # 强制设置返回 logits 的标志
-    if hasattr(unsloth_utils, 'UNSLOTH_RETURN_LOGITS'):
-        unsloth_utils.UNSLOTH_RETURN_LOGITS = True
-        print("✓ Monkey patch: 强制启用 UNSLOTH_RETURN_LOGITS")
-    # 尝试修改其他可能的标志
-    for attr_name in dir(unsloth_utils):
-        if 'RETURN_LOGITS' in attr_name.upper() or 'LOGITS' in attr_name.upper():
-            try:
-                setattr(unsloth_utils, attr_name, True)
-                print(f"✓ Monkey patch: 设置 {attr_name} = True")
-            except:
-                pass
+
+    # 只设置明确的标志变量，不修改其他属性
+    flag_names = ['UNSLOTH_RETURN_LOGITS', 'return_logits', '_return_logits']
+    for flag_name in flag_names:
+        if hasattr(unsloth_utils, flag_name):
+            old_value = getattr(unsloth_utils, flag_name)
+            setattr(unsloth_utils, flag_name, True)
+            print(f"✓ Monkey patch: {flag_name}: {old_value} -> True")
+
+    # 检查是否有 Unsloth_Offloaded_Gradient_Checkpointer 类
+    if hasattr(unsloth_utils, 'Unsloth_Offloaded_Gradient_Checkpointer'):
+        print("✓ 找到 Unsloth_Offloaded_Gradient_Checkpointer")
+
 except Exception as e:
     print(f"⚠ Monkey patch warning: {e}")
 # === End of Monkey Patch ===
@@ -79,21 +80,65 @@ class BalancedSFTTrainer(SFTTrainer):
         """
         重写损失计算，使用类别加权的交叉熵
         """
+        # 强制在调用前再次设置环境变量（针对某些 unsloth 版本）
+        import os
+        os.environ['UNSLOTH_RETURN_LOGITS'] = '1'
+
         # 先调用原始的 forward 得到 logits
-        # 对于 Unsloth 2024.11+，需要明确设置 return_dict=True 和 output_hidden_states=False
-        outputs = model(**inputs, return_dict=True, use_cache=False)
+        # 对于 Unsloth 2024.11+，需要明确设置 return_dict=True
+        # 如果 logits 不可用，我们需要 hidden_states 来计算
+        outputs = model(**inputs, return_dict=True, use_cache=False, output_hidden_states=True)
+
+        # 调试：打印 outputs 的所有属性
+        if not hasattr(self, '_debug_printed'):
+            print(f"\n=== DEBUG: Model outputs 属性 ===")
+            print(f"outputs 类型: {type(outputs)}")
+            print(f"outputs 属性: {[k for k in dir(outputs) if not k.startswith('_')]}")
+            if hasattr(outputs, 'logits'):
+                print(f"logits 类型: {type(outputs.logits)}")
+                print(f"logits 值: {outputs.logits if isinstance(outputs.logits, bool) else 'tensor'}")
+            self._debug_printed = True
 
         # 检查是否有 logits 属性
-        if not hasattr(outputs, 'logits') or outputs.logits is None:
-            raise RuntimeError(
-                "模型输出中没有 logits！请确保在脚本开头设置了: "
-                "os.environ['UNSLOTH_RETURN_LOGITS'] = '1'"
-            )
+        if not hasattr(outputs, 'logits'):
+            raise RuntimeError("模型输出中没有 logits 属性！")
 
         logits = outputs.logits
 
+        # === 处理 logits 为 bool 的特殊情况 ===
+        if isinstance(logits, bool):
+            # logits 是 bool 说明 unsloth 没有正确返回 logits
+            # 尝试从模型的其他输出获取
+            print(f"⚠ WARNING: logits 是 bool ({logits})，尝试其他方式获取...")
+
+            # 方法1: 检查 outputs 的其他属性
+            if hasattr(outputs, 'hidden_states') and outputs.hidden_states is not None:
+                # 使用最后一层 hidden states + lm_head 计算 logits
+                last_hidden_state = outputs.hidden_states[-1]
+
+                # 尝试多种方式访问 lm_head
+                lm_head = None
+                if hasattr(model, 'lm_head'):
+                    lm_head = model.lm_head
+                elif hasattr(model, 'model') and hasattr(model.model, 'lm_head'):
+                    lm_head = model.model.lm_head
+                elif hasattr(model, 'base_model') and hasattr(model.base_model, 'lm_head'):
+                    lm_head = model.base_model.lm_head
+
+                if lm_head is not None:
+                    logits = lm_head(last_hidden_state)
+                    print(f"✓ 从 hidden_states 计算得到 logits: {logits.shape}")
+                else:
+                    raise RuntimeError("无法找到 lm_head 来计算 logits")
+            else:
+                # 方法2: 直接使用默认损失，不进行类别加权
+                print(f"⚠ 无法获取 logits，回退到使用默认损失")
+                if hasattr(outputs, 'loss') and outputs.loss is not None:
+                    return (outputs.loss, outputs) if return_outputs else outputs.loss
+                else:
+                    raise RuntimeError("既无法获取 logits，也没有默认 loss")
+
         # === 强制转换 logits 为真实 tensor ===
-        # 如果 logits 是 unsloth 的特殊包装对象，尝试提取真实 tensor
         if not isinstance(logits, torch.Tensor):
             # 尝试多种方式获取真实 tensor
             if hasattr(logits, '_tensor'):
@@ -103,14 +148,10 @@ class BalancedSFTTrainer(SFTTrainer):
             elif hasattr(logits, 'tensor'):
                 logits = logits.tensor
             else:
-                # 最后的尝试：直接调用 tensor 方法或转换
-                try:
-                    logits = torch.tensor(logits)
-                except:
-                    raise RuntimeError(
-                        f"无法将 logits 转换为 tensor，类型为: {type(logits)}\n"
-                        "这是 unsloth 的兼容性问题。"
-                    )
+                raise RuntimeError(
+                    f"无法将 logits 转换为 tensor，类型为: {type(logits)}\n"
+                    "这是 unsloth 的兼容性问题。"
+                )
 
         labels = inputs["labels"]
 
