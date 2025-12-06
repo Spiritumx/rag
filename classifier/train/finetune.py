@@ -15,6 +15,26 @@ import torch.nn.functional as F
 from collections import Counter
 import json
 
+# === Monkey Patch: 强制启用 logits 返回 ===
+# 直接修改 unsloth 内部变量来绕过环境变量检查
+try:
+    import unsloth.models._utils as unsloth_utils
+    # 强制设置返回 logits 的标志
+    if hasattr(unsloth_utils, 'UNSLOTH_RETURN_LOGITS'):
+        unsloth_utils.UNSLOTH_RETURN_LOGITS = True
+        print("✓ Monkey patch: 强制启用 UNSLOTH_RETURN_LOGITS")
+    # 尝试修改其他可能的标志
+    for attr_name in dir(unsloth_utils):
+        if 'RETURN_LOGITS' in attr_name.upper() or 'LOGITS' in attr_name.upper():
+            try:
+                setattr(unsloth_utils, attr_name, True)
+                print(f"✓ Monkey patch: 设置 {attr_name} = True")
+            except:
+                pass
+except Exception as e:
+    print(f"⚠ Monkey patch warning: {e}")
+# === End of Monkey Patch ===
+
 # --- 配置 ---
 # 尝试从项目根目录加载本地模型，如果失败则使用 HF Hub
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
@@ -71,6 +91,27 @@ class BalancedSFTTrainer(SFTTrainer):
             )
 
         logits = outputs.logits
+
+        # === 强制转换 logits 为真实 tensor ===
+        # 如果 logits 是 unsloth 的特殊包装对象，尝试提取真实 tensor
+        if not isinstance(logits, torch.Tensor):
+            # 尝试多种方式获取真实 tensor
+            if hasattr(logits, '_tensor'):
+                logits = logits._tensor
+            elif hasattr(logits, 'data'):
+                logits = logits.data
+            elif hasattr(logits, 'tensor'):
+                logits = logits.tensor
+            else:
+                # 最后的尝试：直接调用 tensor 方法或转换
+                try:
+                    logits = torch.tensor(logits)
+                except:
+                    raise RuntimeError(
+                        f"无法将 logits 转换为 tensor，类型为: {type(logits)}\n"
+                        "这是 unsloth 的兼容性问题。"
+                    )
+
         labels = inputs["labels"]
 
         # 如果没有设置类别权重，使用默认损失
@@ -285,7 +326,7 @@ def main():
         train_dataset = dataset["train"],
         eval_dataset = dataset["test"],
         dataset_text_field = "text",
-        packing = False,  # 禁用 packing，避免与 flash attention 的兼容性问题
+        packing = True,  # 禁用 packing，避免与 flash attention 的兼容性问题
         args = training_args,
         class_weights = class_weights,  # 传入类别权重
         label_token_ids = label_token_ids,  # 传入标签 token ID 映射
