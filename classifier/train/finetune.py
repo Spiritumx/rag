@@ -279,6 +279,9 @@ def main():
         label_token_ids = label_token_ids,  # 传入标签 token ID 映射
     )
 
+    # 设置 Unsloth 返回 logits（自定义 loss 需要）
+    os.environ['UNSLOTH_RETURN_LOGITS'] = '1'
+
     print("Starting training...")
     trainer_stats = trainer.train()
     print("Training completed!")
