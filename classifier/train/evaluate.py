@@ -194,7 +194,7 @@ def evaluate():
                 input_ids=input_ids,
                 attention_mask=attention_mask,  # 传递 attention_mask
                 # --- 关键修改：大幅增加生成长度，确保不会截断标签 ---
-                max_new_tokens=1024,  # 从 512 增加到 1024，确保能生成完整的分析+标签
+                max_new_tokens=2048,  # 从 512 增加到 1024，确保能生成完整的分析+标签
                 temperature=0.1,
                 do_sample=False,     # 建议分类任务关闭采样，使用贪婪搜索确保确定性
                 pad_token_id=tokenizer.eos_token_id,
