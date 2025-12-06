@@ -86,8 +86,8 @@ class BalancedSFTTrainer(SFTTrainer):
 
         # 先调用原始的 forward 得到 logits
         # 对于 Unsloth 2024.11+，需要明确设置 return_dict=True
-        # 如果 logits 不可用，我们需要 hidden_states 来计算
-        outputs = model(**inputs, return_dict=True, use_cache=False, output_hidden_states=True)
+        # 注意：不要设置 output_hidden_states=True，会大量占用显存
+        outputs = model(**inputs, return_dict=True, use_cache=False)
 
         # 调试：打印 outputs 的所有属性
         if not hasattr(self, '_debug_printed'):
@@ -345,10 +345,10 @@ def main():
     # 训练参数
     training_args = TrainingArguments(
         output_dir = OUTPUT_DIR,
-        per_device_train_batch_size = 32, # 根据显存调整，5090可以尝试 8 或 16
-        gradient_accumulation_steps = 1,
+        per_device_train_batch_size = 8,  # 减小 batch size 以节省显存（从 32 降到 8）
+        gradient_accumulation_steps = 4,  # 增加梯度累积步数，保持有效 batch size = 8*4 = 32
         warmup_steps = 10,
-        num_train_epochs = 3, 
+        num_train_epochs = 3,
         learning_rate = 2e-4,
         fp16 = not torch.cuda.is_bf16_supported(),
         bf16 = torch.cuda.is_bf16_supported(),
