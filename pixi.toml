@@ -41,6 +41,7 @@ fastapi = ">=0.121.2,<0.122"
 jsonlines = ">=4.0.0,<5"
 # 解决 datasets 依赖冲突的通用配置
 fsspec = "<=2025.9.0"
+tensorboard = ">=2.20.0,<3"
 
 [target.linux-64.dependencies]
 cuda-version = "13.0.*"
