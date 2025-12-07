@@ -192,12 +192,13 @@ def evaluate():
         with torch.no_grad():
             outputs = model.generate(
                 input_ids=input_ids,
-                attention_mask=attention_mask,  # 传递 attention_mask
-                # --- 关键修改：大幅增加生成长度，确保不会截断标签 ---
-                max_new_tokens=2048,  # 从 512 增加到 1024，确保能生成完整的分析+标签
-                temperature=0.1,
-                do_sample=False,     # 建议分类任务关闭采样，使用贪婪搜索确保确定性
-                pad_token_id=tokenizer.eos_token_id,
+                attention_mask=attention_mask,
+                # --- 优化：根据训练数据的实际长度设置合理的 max_new_tokens ---
+                # 训练数据: Analysis(~100) + Risk(~100) + Recommendation(~50) ≈ 250-350 tokens
+                max_new_tokens=512,  # 足够生成完整回复，同时保持速度
+                temperature=0.0,  # 改为 0.0 使用纯贪婪解码，更快更确定
+                do_sample=False,
+                pad_token_id=tokenizer.pad_token_id,
                 eos_token_id=tokenizer.eos_token_id,
             )
 
