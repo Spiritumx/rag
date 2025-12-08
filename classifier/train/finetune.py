@@ -3,14 +3,12 @@ import os
 import sys
 import json
 from datasets import load_dataset
-from trl import SFTTrainer
-from transformers import TrainingArguments
+# 关键修改：引入 SFTConfig
+from trl import SFTTrainer, SFTConfig
 from unsloth import FastLanguageModel
 
-# --- 1. 路径配置 (根据你的描述修改) ---
-# 获取当前脚本所在目录 (classifier/train)
+# --- 1. 路径配置 ---
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-# 数据文件路径 (classifier/data/training_data/final_finetuning_dataset.jsonl)
 DATA_FILE = os.path.abspath(os.path.join(CURRENT_DIR, "../data/training_data/final_finetuning_dataset.jsonl"))
 
 # 模型路径
@@ -22,11 +20,10 @@ OUTPUT_DIR = "/root/autodl-tmp/output/Qwen2.5-3B-RAG-Router"
 
 # --- 2. 训练超参数 ---
 MAX_SEQ_LENGTH = 2048
-DTYPE = None # None = 自动检测 (float16 for T4, bfloat16 for Ampere+)
-LOAD_IN_4BIT = False # 显存大于 16G 可设为 False，否则设为 True
+DTYPE = None 
+LOAD_IN_4BIT = False 
 
-# --- 3. System Prompt (精简版，用于微调) ---
-# 我们不需要把生成数据时那么长的 prompt 放进去，只要通过微调让模型学会输出格式即可
+# --- 3. System Prompt ---
 SYSTEM_PROMPT = """You are an expert RAG router. Analyze the user query complexity and determine the optimal retrieval strategy.
 Output the analysis in the following format:
 Analysis: <reasoning process>
@@ -37,17 +34,14 @@ Action: <Z/S-Sparse/S-Dense/S-Hybrid/M>"""
 def formatting_prompts_func(examples, tokenizer):
     """
     将 JSON 数据格式化为 Qwen 的 Chat 模板
-    Input fields: question_text, reasoning, complexity_label, index_strategy, action
     """
     convos = []
     texts = []
     
-    # 批量处理
     for i in range(len(examples["question_text"])):
         question = examples["question_text"][i]
         
         # 构建 Assistant 的思维链回答
-        # 这里的顺序至关重要：先推理(Reasoning)，再给结论(Action)
         assistant_content = (
             f"Analysis: {examples['reasoning'][i]}\n"
             f"Complexity: {examples['complexity_label'][i]}\n"
@@ -55,24 +49,22 @@ def formatting_prompts_func(examples, tokenizer):
             f"Action: {examples['action'][i]}"
         )
 
-        # 构建对话消息
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": question},
             {"role": "assistant", "content": assistant_content}
         ]
         
-        # 使用 Tokenizer 应用 Chat 模板
         text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=False)
         texts.append(text)
         
     return { "text": texts }
+
 def main():
-    # --- 路径检查逻辑优化 ---
+    # --- 路径检查逻辑 ---
     if os.path.exists(LOCAL_MODEL_PATH):
         MODEL_NAME = LOCAL_MODEL_PATH
         print(f"✅ 检测到本地模型，路径: {MODEL_NAME}")
-        # 关键：如果本地存在，强制开启离线模式
         extra_kwargs = {"local_files_only": True}
     else:
         MODEL_NAME = "Qwen/Qwen2.5-3B-Instruct"
@@ -81,22 +73,18 @@ def main():
 
     # 1. 加载模型
     print(f"🚀 Loading model from {MODEL_NAME}...")
-    
     try:
         model, tokenizer = FastLanguageModel.from_pretrained(
             model_name = MODEL_NAME,
             max_seq_length = MAX_SEQ_LENGTH,
             dtype = DTYPE,
             load_in_4bit = LOAD_IN_4BIT,
-            # 将 extra_kwargs 解包传入，强制 transformers 只看本地
             **extra_kwargs 
         )
     except Exception as e:
-        print("\n❌ 模型加载失败！请检查以下几点：")
-        print("1. 本地路径是否正确？")
-        print(f"2. 目录 {MODEL_NAME} 下是否包含 config.json 和 model.safetensors 文件？")
-        print("3. 报错信息如下：")
+        print("\n❌ 模型加载失败！请检查路径。")
         raise e
+
     # 2. 配置 LoRA
     model = FastLanguageModel.get_peft_model(
         model,
@@ -104,7 +92,7 @@ def main():
         target_modules = ["q_proj", "k_proj", "v_proj", "o_proj",
                           "gate_proj", "up_proj", "down_proj"],
         lora_alpha = 16,
-        lora_dropout = 0, # 微调推荐稍微加一点 dropout 防止过拟合
+        lora_dropout = 0, # 设置为 0 以启用 Unsloth 加速
         bias = "none",
         use_gradient_checkpointing = "unsloth", 
         random_state = 3407,
@@ -115,10 +103,8 @@ def main():
     if not os.path.exists(DATA_FILE):
         raise FileNotFoundError(f"找不到数据文件: {DATA_FILE}")
 
-    # 直接加载 JSONL
     full_dataset = load_dataset("json", data_files=DATA_FILE, split="train")
     
-    # 自动划分训练集和验证集 (90% Train, 10% Test)
     print("✂️ Splitting dataset...")
     dataset_split = full_dataset.train_test_split(test_size=0.1, seed=42)
     train_dataset = dataset_split["train"]
@@ -129,14 +115,19 @@ def main():
 
     # 4. 数据格式化
     print("🔄 Formatting prompts...")
-    # 使用 functools.partial 或者 lambda 传递 tokenizer
     format_func = lambda x: formatting_prompts_func(x, tokenizer)
-    
     train_dataset = train_dataset.map(format_func, batched=True)
     test_dataset = test_dataset.map(format_func, batched=True)
-    # 5. 训练参数配置
-    training_args = TrainingArguments(
+
+    # 5. 训练参数配置 (使用 SFTConfig 替代 TrainingArguments)
+    # 修复点：TRL v0.12.0+ 要求所有 SFT 参数放入 SFTConfig
+    training_args = SFTConfig(
         output_dir = OUTPUT_DIR,
+        dataset_text_field = "text",       # 明确指定文本列名
+        max_seq_length = MAX_SEQ_LENGTH,   # 移入 Config
+        dataset_num_proc = 4,              # 移入 Config
+        packing = False,                   # 移入 Config
+        
         per_device_train_batch_size = 4,
         gradient_accumulation_steps = 8,
         warmup_steps = 20,
@@ -151,26 +142,22 @@ def main():
         seed = 3407,
         
         save_strategy = "steps", 
-        eval_strategy = "steps",
+        eval_strategy = "steps",           # 修复点：evaluation_strategy -> eval_strategy
         eval_steps = 50,
         save_steps = 50,
-        # 4. 开启加载最佳模型
         load_best_model_at_end = True,
         metric_for_best_model = "loss",
-        save_total_limit = 2, # 最多只保留 2 个 checkpoint，防止占满硬盘
+        save_total_limit = 2,
         report_to = "tensorboard",
-   )
+    )
 
     # 6. Trainer 初始化
     trainer = SFTTrainer(
         model = model,
-        processing_class = tokenizer,
+        processing_class = tokenizer,      # 修复点：tokenizer -> processing_class
         train_dataset = train_dataset,
         eval_dataset = test_dataset,
-        max_seq_length = MAX_SEQ_LENGTH,
-        dataset_num_proc = 4,
-        packing = False, 
-        args = training_args,
+        args = training_args,              # 所有的 max_seq_length 等参数都在这里面了
     )
 
     # 7. 开始训练
@@ -183,7 +170,6 @@ def main():
     model.save_pretrained(os.path.join(OUTPUT_DIR, "lora_model"))
     tokenizer.save_pretrained(os.path.join(OUTPUT_DIR, "lora_model"))
     
-    # 保存 tokenizer 的配置以防万一
     tokenizer.save_vocabulary(os.path.join(OUTPUT_DIR, "lora_model"))
 
 if __name__ == "__main__":
