@@ -164,7 +164,7 @@ def main():
     # 6. Trainer 初始化
     trainer = SFTTrainer(
         model = model,
-        tokenizer = tokenizer,
+        processing_class = tokenizer,
         train_dataset = train_dataset,
         eval_dataset = test_dataset,
         dataset_text_field = "text",
