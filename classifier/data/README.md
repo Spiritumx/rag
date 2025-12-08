@@ -20,8 +20,11 @@ pip install -r requirements.txt
 cp config.example.json config.json
 # 编辑 config.json，设置你的 API key
 
-# 3. 运行
+# 3. 生成训练数据
 python generate_training_data.py
+
+# 4. (可选) 验证数据质量
+python validate_generated_data.py
 ```
 
 ## 依赖安装
@@ -330,6 +333,32 @@ Example:
 ```
 
 处理成功后再改为 `null` 处理全部数据集。
+
+## 数据质量验证
+
+生成数据后，强烈建议验证数据质量：
+
+```bash
+python validate_generated_data.py
+```
+
+### 验证模式
+
+- **Quick (10 samples)** - 快速检查
+- **Standard (50 samples)** - 推荐使用
+- **Thorough (100 samples)** - 全面验证
+- **Custom** - 自定义样本数
+- **Specific dataset** - 验证特定数据集
+
+### 质量标准
+
+良好的质量指标：
+- Complexity 一致性 ≥ 90%
+- Strategy 一致性 ≥ 85%
+- Action 一致性 ≥ 85%
+- Overall 一致性 ≥ 80%
+
+详细说明请查看 [VALIDATION_GUIDE.md](./VALIDATION_GUIDE.md)
 
 ## 故障排除
 
