@@ -104,7 +104,7 @@ def main():
         target_modules = ["q_proj", "k_proj", "v_proj", "o_proj",
                           "gate_proj", "up_proj", "down_proj"],
         lora_alpha = 16,
-        lora_dropout = 0.05, # 微调推荐稍微加一点 dropout 防止过拟合
+        lora_dropout = 0, # 微调推荐稍微加一点 dropout 防止过拟合
         bias = "none",
         use_gradient_checkpointing = "unsloth", 
         random_state = 3407,
@@ -137,26 +137,29 @@ def main():
     # 5. 训练参数配置
     training_args = TrainingArguments(
         output_dir = OUTPUT_DIR,
-        per_device_train_batch_size = 4,   # 显存优化: 4
-        gradient_accumulation_steps = 8,   # 累积: 8 -> 等效 Batch Size 32
+        per_device_train_batch_size = 4,
+        gradient_accumulation_steps = 8,
         warmup_steps = 20,
-        num_train_epochs = 2,              # 建议跑 2-3 个 epoch 以充分学习 CoT
-        learning_rate = 1e-4,              # Qwen 微调常用学习率
+        num_train_epochs = 2,
+        learning_rate = 1e-4,
         fp16 = not torch.cuda.is_bf16_supported(),
         bf16 = torch.cuda.is_bf16_supported(),
         logging_steps = 10,
         optim = "adamw_8bit",
         weight_decay = 0.01,
-        lr_scheduler_type = "cosine",      # Cosine 通常比 linear 效果好
+        lr_scheduler_type = "cosine",
         seed = 3407,
-        save_strategy = "epoch",
-        eval_strategy = "steps",     # 边训练边验证
-        eval_steps = 50,                   # 每 50 步验证一次
-        save_total_limit = 2,
+        
+        save_strategy = "steps", 
+        eval_strategy = "steps",
+        eval_steps = 50,
+        save_steps = 50,
+        # 4. 开启加载最佳模型
         load_best_model_at_end = True,
-        metric_for_best_model = "loss",       
+        metric_for_best_model = "loss",
+        save_total_limit = 2, # 最多只保留 2 个 checkpoint，防止占满硬盘
         report_to = "tensorboard",
-    )
+   )
 
     # 6. Trainer 初始化
     trainer = SFTTrainer(
