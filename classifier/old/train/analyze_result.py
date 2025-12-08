@@ -1,79 +1,147 @@
-import re
-from datasets import load_from_disk
-from sklearn.metrics import confusion_matrix, classification_report
-import pandas as pd
 import os
+import re
+from collections import defaultdict
+import pandas as pd
 
-# --- 配置 ---
-# 必须和 evaluate.py 的路径一致
-DATA_DIR = "/root/autodl-tmp/data"
-LOG_FILE = "/root/autodl-tmp/output/evaluation_log_v2.txt"
+# 日志文件路径 (根据你上一步的输出)
+LOG_FILE = "/root/autodl-tmp/output/eval_final_lora.txt"
 
-def get_coarse_label(fine_label):
-    """将细粒度标签映射为 3 大类"""
-    if not fine_label or fine_label == "UNKNOWN": return "UNKNOWN"
-    if fine_label.startswith("Z"): return "Z_NoRet"
-    if fine_label.startswith("S"): return "S_Single"
-    if fine_label.startswith("M"): return "M_Multi"
-    return "UNKNOWN"
+def parse_log_file(file_path):
+    if not os.path.exists(file_path):
+        print(f"❌ 错误: 找不到日志文件 {file_path}")
+        return None
 
-def parse_log_file(log_path):
-    """解析 evaluate.py 生成的日志文件"""
-    y_true = []
-    y_pred = []
+    print(f"正在分析日志: {file_path} ...\n")
     
-    with open(log_path, 'r', encoding='utf-8') as f:
+    # 存储细粒度混淆矩阵: matrix[GT][Pred] = Count
+    matrix = defaultdict(lambda: defaultdict(int))
+    
+    with open(file_path, 'r', encoding='utf-8') as f:
         content = f.read()
-    
-    # 提取日志中的 GT 和 Pred
-    # 格式: GT: S4 | Pred: Z0
-    matches = re.findall(r'GT:\s*([ZSM]\d+)\s*\|\s*Pred:\s*([ZSM]\d+|UNKNOWN|EMPTY)', content)
-    
-    for gt, pred in matches:
-        y_true.append(gt)
-        y_pred.append(pred)
         
-    return y_true, y_pred
+    # 使用正则提取 "GT -> Pred: Count"
+    # 格式示例: S1 -> S2: 5
+    pattern = re.compile(r'([A-Z0-9]+)\s*->\s*([A-Z0-9]+):\s*(\d+)')
+    matches = pattern.findall(content)
+    
+    all_labels = set()
+    for gt, pred, count in matches:
+        count = int(count)
+        matrix[gt][pred] = count
+        all_labels.add(gt)
+        all_labels.add(pred)
+        
+    return matrix, sorted(list(all_labels))
+
+def calculate_metrics(matrix, labels):
+    """计算每个类别的 Precision, Recall (Accuracy), F1"""
+    stats = []
+    
+    # 总体统计
+    total_samples = 0
+    total_correct = 0
+    
+    for label in labels:
+        # True Positive: GT是该类，且预测也是该类
+        tp = matrix[label][label]
+        
+        # False Negative: GT是该类，但预测成了别的 (漏报) -> 影响 Recall
+        fn = sum(matrix[label].values()) - tp
+        
+        # False Positive: GT是别的，但预测成了该类 (误报) -> 影响 Precision
+        fp = sum(matrix[gt][label] for gt in matrix) - tp
+        
+        total = tp + fn
+        total_samples += total
+        total_correct += tp
+        
+        # 计算指标
+        recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0     # 该类别的分类准确率
+        precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0  # 预测准确度
+        f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
+        
+        stats.append({
+            "Label": label,
+            "Sample Count": total,
+            "Correct": tp,
+            "Accuracy (Recall)": recall, # 也就是该类别的召回率
+            "Precision": precision,
+            "F1 Score": f1
+        })
+        
+    return stats, total_correct / total_samples if total_samples > 0 else 0
+
+def to_coarse(label):
+    """将细粒度标签转换为粗粒度 (S1->S, M1->M, Z0->Z)"""
+    if not label or label == "UNKNOWN": return "UNKNOWN"
+    return label[0]
 
 def analyze():
-    print("正在分析日志文件:", LOG_FILE)
-    if not os.path.exists(LOG_FILE):
-        print("错误: 找不到日志文件，请先运行 evaluate.py")
-        return
+    matrix, fine_labels = parse_log_file(LOG_FILE)
+    if not matrix: return
 
-    y_true, y_pred = parse_log_file(LOG_FILE)
-    print(f"提取到 {len(y_true)} 条预测记录")
-
-    # ------------------------------------------------
-    # 1. 细粒度分析 (8类)
-    # ------------------------------------------------
-    print("\n" + "="*40)
-    print("【细粒度评估】 (8 Class Accuracy)")
-    print("="*40)
-    labels_order = sorted(list(set(y_true + y_pred)))
-    print(classification_report(y_true, y_pred, digits=4, zero_division=0))
-
-    # ------------------------------------------------
-    # 2. 粗粒度分析 (3类 - 论文核心指标)
-    # ------------------------------------------------
-    y_true_coarse = [get_coarse_label(l) for l in y_true]
-    y_pred_coarse = [get_coarse_label(l) for l in y_pred]
+    # ==========================
+    # 1. 细粒度分析 (Fine-Grained)
+    # ==========================
+    print("="*60)
+    print("【细粒度详细指标】(Z0, S1, S2, ..., M4)")
+    print("="*60)
     
-    print("\n" + "="*40)
-    print("【粗粒度评估】 (3 Class Accuracy - Z/S/M)")
-    print("这是你论文真正需要的指标！")
-    print("="*40)
-    print(classification_report(y_true_coarse, y_pred_coarse, digits=4, zero_division=0))
+    fine_stats, fine_acc = calculate_metrics(matrix, fine_labels)
+    df_fine = pd.DataFrame(fine_stats)
+    
+    # 格式化输出
+    print(df_fine.to_string(index=False, formatters={
+        "Accuracy (Recall)": "{:.2%}".format,
+        "Precision": "{:.2%}".format,
+        "F1 Score": "{:.2%}".format
+    }))
+    print("-" * 60)
+    print(f"总体细粒度准确率: {fine_acc:.2%}")
+    print("\n")
 
-    # ------------------------------------------------
-    # 3. 混淆情况速查
-    # ------------------------------------------------
-    print("\n【主要混淆方向】")
-    # 找出错误的预测
-    mistakes = [(t, p) for t, p in zip(y_true, y_pred) if t != p]
-    mistake_counts = pd.Series(mistakes).value_counts().head(5)
-    for (true_l, pred_l), count in mistake_counts.items():
-        print(f"真实是 [{true_l}] 但预测成了 -> [{pred_l}]: {count} 次")
+    # ==========================
+    # 2. 粗粒度分析 (Coarse-Grained)
+    # ==========================
+    print("="*60)
+    print("【粗粒度详细指标】(Z vs S vs M)")
+    print("="*60)
+    
+    # 构建粗粒度矩阵
+    coarse_matrix = defaultdict(lambda: defaultdict(int))
+    coarse_labels = set()
+    
+    for gt in matrix:
+        for pred in matrix[gt]:
+            c_gt = to_coarse(gt)
+            c_pred = to_coarse(pred)
+            coarse_matrix[c_gt][c_pred] += matrix[gt][pred]
+            coarse_labels.add(c_gt)
+            coarse_labels.add(c_pred)
+            
+    coarse_stats, coarse_acc = calculate_metrics(coarse_matrix, sorted(list(coarse_labels)))
+    df_coarse = pd.DataFrame(coarse_stats)
+    
+    print(df_coarse.to_string(index=False, formatters={
+        "Accuracy (Recall)": "{:.2%}".format,
+        "Precision": "{:.2%}".format,
+        "F1 Score": "{:.2%}".format
+    }))
+    print("-" * 60)
+    print(f"总体粗粒度准确率: {coarse_acc:.2%}")
+    
+    # ==========================
+    # 3. 粗粒度混淆矩阵可视化
+    # ==========================
+    print("\n[粗粒度混淆矩阵详情]")
+    sorted_cl = sorted(list(coarse_labels))
+    # 表头
+    print(f"{'GT \\ Pred':<10} | " + " | ".join([f"{l:<5}" for l in sorted_cl]))
+    print("-" * (15 + 8 * len(sorted_cl)))
+    
+    for gt in sorted_cl:
+        row = [f"{coarse_matrix[gt][l]:<5}" for l in sorted_cl]
+        print(f"{gt:<10} | " + " | ".join(row))
 
 if __name__ == "__main__":
     analyze()
