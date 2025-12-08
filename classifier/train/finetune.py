@@ -134,7 +134,6 @@ def main():
     
     train_dataset = train_dataset.map(format_func, batched=True)
     test_dataset = test_dataset.map(format_func, batched=True)
-
     # 5. 训练参数配置
     training_args = TrainingArguments(
         output_dir = OUTPUT_DIR,
@@ -151,9 +150,11 @@ def main():
         lr_scheduler_type = "cosine",      # Cosine 通常比 linear 效果好
         seed = 3407,
         save_strategy = "epoch",
-        evaluation_strategy = "steps",     # 边训练边验证
+        eval_strategy = "steps",     # 边训练边验证
         eval_steps = 50,                   # 每 50 步验证一次
         save_total_limit = 2,
+        load_best_model_at_end = True,
+        metric_for_best_model = "loss",       
         report_to = "tensorboard",
     )
 
