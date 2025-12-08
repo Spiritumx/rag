@@ -195,23 +195,28 @@ class DataAugmentationPipeline:
                     print(f"⚠️  WARNING: API call failed (attempt {attempt + 1}/{retry}), retrying in {wait_time}s...")
                     await asyncio.sleep(wait_time)
 
-    async def process_single_item(self, item: Dict[str, Any]) -> Dict[str, Any]:
+    async def process_single_item(self, item: Dict[str, Any], dataset_name: str) -> Dict[str, Any]:
         """
         处理单个数据项
 
         Args:
             item: 原始数据项
+            dataset_name: 数据集名称（从文件路径提取）
 
         Returns:
             增强后的数据项
         """
-        question = item["question_text"]
+        question = item.get("question_text", "")
+        if not question:
+            raise ValueError("Missing question_text in item")
+
         analysis = await self.analyze_query(question)
 
         # 构建训练数据格式
+        # 使用 get() 方法安全访问字段，如果数据中没有 dataset 字段则使用传入的 dataset_name
         training_item = {
-            "dataset": item["dataset"],
-            "question_id": item["question_id"],
+            "dataset": item.get("dataset", dataset_name),
+            "question_id": item.get("question_id", "unknown"),
             "question_text": question,
             "reasoning": analysis.reasoning,
             "complexity_label": analysis.complexity_label,
@@ -223,12 +228,13 @@ class DataAugmentationPipeline:
 
         return training_item
 
-    async def process_file(self, file_path: Path) -> List[Dict[str, Any]]:
+    async def process_file(self, file_path: Path, dataset_name: str) -> List[Dict[str, Any]]:
         """
         处理单个 JSONL 文件
 
         Args:
             file_path: 输入文件路径
+            dataset_name: 数据集名称（从文件路径提取）
 
         Returns:
             处理后的数据列表
@@ -253,8 +259,8 @@ class DataAugmentationPipeline:
 
         print(f"\n📊 Processing {file_path.name}: {len(items)} items")
 
-        # 并发处理所有数据项
-        tasks = [self.process_single_item(item) for item in items]
+        # 并发处理所有数据项，传递 dataset_name
+        tasks = [self.process_single_item(item, dataset_name) for item in items]
         results = []
 
         # 使用 tqdm 显示进度
@@ -305,7 +311,7 @@ class DataAugmentationPipeline:
                 continue
 
             try:
-                results = await self.process_file(dataset_path)
+                results = await self.process_file(dataset_path, dataset_name)
                 all_training_data.extend(results)
 
                 # 保存单个数据集的结果
