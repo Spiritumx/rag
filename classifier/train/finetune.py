@@ -4,8 +4,8 @@ import sys
 import json
 from datasets import load_dataset
 # 关键修改：引入 SFTConfig
-from trl import SFTTrainer, SFTConfig
 from unsloth import FastLanguageModel
+from trl import SFTTrainer, SFTConfig
 
 # --- 1. 路径配置 ---
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
