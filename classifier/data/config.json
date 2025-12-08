@@ -1,0 +1,13 @@
+{
+  "api_settings": {
+    "api_key": "sk-BZQdNZeSwyih3TKpD95fDd83A90e4556A95f7eB7D489C36b",
+    "base_url": "https://api.gpt.ge/v1/",
+    "model": "gpt-4o",
+    "max_concurrent": 10
+  },
+  "data_settings": {
+    "data_dir": "../../processed_data",
+    "output_dir": "./training_data",
+    "datasets": null
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "_comment_1": "=== OpenAI API 设置 ===",
+  "api_settings": {
+    "_comment": "API密钥,可以留空使用环境变量OPENAI_API_KEY",
+    "api_key": "",
+
+    "_comment_base_url": "自定义API端点(可选),例如使用代理或其他兼容的API",
+    "base_url": null,
+
+    "_comment_model": "使用的模型,gpt-4o-mini成本更低,gpt-4o效果更好",
+    "model": "gpt-4o-mini",
+
+    "_comment_concurrent": "最大并发请求数,建议10-20之间,过高可能触发速率限制",
+    "max_concurrent": 10
+  },
+
+  "_comment_2": "=== 数据处理设置 ===",
+  "data_settings": {
+    "_comment_data_dir": "输入数据目录,相对于脚本的路径",
+    "data_dir": "../../processed_data",
+
+    "_comment_output_dir": "输出目录,生成的训练数据保存在这里",
+    "output_dir": "./training_data",
+
+    "_comment_datasets": "要处理的数据集列表,null表示处理全部6个数据集",
+    "_datasets_options": ["2wikimultihopqa", "hotpotqa", "musique", "nq", "squad", "trivia"],
+    "datasets": null
+  },
+
+  "_usage_examples": {
+    "_example_1": "处理所有数据集: datasets设为null",
+    "_example_2": "只处理NQ数据集: datasets设为['nq']",
+    "_example_3": "处理多个: datasets设为['nq', 'squad', 'hotpotqa']"
+  }
+}
