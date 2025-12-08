@@ -183,6 +183,22 @@ python generate_training_data.py
 }
 ```
 
+## 数据集类型弱标签
+
+脚本在生成数据时会自动将数据集类型信息（单跳 vs 多跳）嵌入到 prompt 中作为上下文:
+
+- **单跳数据集**: nq, squad, trivia
+- **多跳数据集**: 2wikimultihopqa, hotpotqa, musique
+
+当调用 OpenAI API 分析问题时，user message 会包含:
+```
+Analyze this query: [question]
+
+[Context: This query is from a single-hop dataset]
+```
+
+这样 LLM 在进行分类时可以参考数据集来源作为弱监督信号，但最终的标签仍由 LLM 基于问题本身的分析来决定。
+
 ## 标签说明
 
 ### complexity_label (复杂度标签)

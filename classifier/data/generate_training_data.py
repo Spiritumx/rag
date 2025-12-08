@@ -12,6 +12,19 @@ from openai import AsyncOpenAI
 from tqdm.asyncio import tqdm
 
 
+# Dataset Type Mapping (单跳 vs 多跳)
+DATASET_TYPE_MAPPING = {
+    # 多跳数据集
+    "2wikimultihopqa": "multi-hop",
+    "hotpotqa": "multi-hop",
+    "musique": "multi-hop",
+    # 单跳数据集
+    "nq": "single-hop",
+    "squad": "single-hop",
+    "trivia": "single-hop"
+}
+
+
 # Pydantic Schema Definition
 class RagRoutingAnalysis(BaseModel):
     reasoning: str = Field(
@@ -146,12 +159,13 @@ class DataAugmentationPipeline:
             print(f"   {e}")
             raise
 
-    async def analyze_query(self, question: str, retry: int = 3) -> RagRoutingAnalysis:
+    async def analyze_query(self, question: str, dataset_type: str = None, retry: int = 3) -> RagRoutingAnalysis:
         """
         使用 OpenAI Structured Outputs 分析单个查询
 
         Args:
             question: 查询文本
+            dataset_type: 数据集类型 ("single-hop" 或 "multi-hop")，作为弱标签嵌入 prompt
             retry: 重试次数
 
         Returns:
@@ -160,11 +174,15 @@ class DataAugmentationPipeline:
         async with self.semaphore:
             for attempt in range(retry):
                 try:
+                    # 构建用户消息，嵌入数据集类型作为弱标签
+                    user_message = f"Analyze this query: {question}"
+                    if dataset_type:
+                        user_message += f"\n\n[Context Hint]: This query comes from a {dataset_type} dataset. Use this as a hint, but verify it based on the query's actual linguistic structure."
                     response = await self.client.beta.chat.completions.parse(
                         model=self.model,
                         messages=[
                             {"role": "system", "content": SYSTEM_PROMPT},
-                            {"role": "user", "content": f"Analyze this query: {question}"}
+                            {"role": "user", "content": user_message}
                         ],
                         response_format=RagRoutingAnalysis,
                     )
@@ -210,7 +228,9 @@ class DataAugmentationPipeline:
         if not question:
             raise ValueError("Missing question_text in item")
 
-        analysis = await self.analyze_query(question)
+        # 获取数据集类型作为弱标签，嵌入到 prompt 中
+        dataset_type = DATASET_TYPE_MAPPING.get(dataset_name)
+        analysis = await self.analyze_query(question, dataset_type=dataset_type)
 
         # 构建训练数据格式
         # 使用 get() 方法安全访问字段，如果数据中没有 dataset 字段则使用传入的 dataset_name
