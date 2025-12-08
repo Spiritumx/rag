@@ -67,17 +67,36 @@ def formatting_prompts_func(examples, tokenizer):
         texts.append(text)
         
     return { "text": texts }
-
 def main():
+    # --- 路径检查逻辑优化 ---
+    if os.path.exists(LOCAL_MODEL_PATH):
+        MODEL_NAME = LOCAL_MODEL_PATH
+        print(f"✅ 检测到本地模型，路径: {MODEL_NAME}")
+        # 关键：如果本地存在，强制开启离线模式
+        extra_kwargs = {"local_files_only": True}
+    else:
+        MODEL_NAME = "Qwen/Qwen2.5-3B-Instruct"
+        print(f"⚠️ 未找到本地模型 {LOCAL_MODEL_PATH}，尝试从 HuggingFace 下载...")
+        extra_kwargs = {}
+
     # 1. 加载模型
     print(f"🚀 Loading model from {MODEL_NAME}...")
-    model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name = MODEL_NAME,
-        max_seq_length = MAX_SEQ_LENGTH,
-        dtype = DTYPE,
-        load_in_4bit = LOAD_IN_4BIT,
-    )
-
+    
+    try:
+        model, tokenizer = FastLanguageModel.from_pretrained(
+            model_name = MODEL_NAME,
+            max_seq_length = MAX_SEQ_LENGTH,
+            dtype = DTYPE,
+            load_in_4bit = LOAD_IN_4BIT,
+            # 将 extra_kwargs 解包传入，强制 transformers 只看本地
+            **extra_kwargs 
+        )
+    except Exception as e:
+        print("\n❌ 模型加载失败！请检查以下几点：")
+        print("1. 本地路径是否正确？")
+        print(f"2. 目录 {MODEL_NAME} 下是否包含 config.json 和 model.safetensors 文件？")
+        print("3. 报错信息如下：")
+        raise e
     # 2. 配置 LoRA
     model = FastLanguageModel.get_peft_model(
         model,
