@@ -124,7 +124,7 @@ def main():
     training_args = SFTConfig(
         output_dir = OUTPUT_DIR,
         dataset_text_field = "text",       # 明确指定文本列名
-        max_seq_length = MAX_SEQ_LENGTH,   # 移入 Config
+        max_length = MAX_SEQ_LENGTH,   # 移入 Config
         dataset_num_proc = 4,              # 移入 Config
         packing = False,                   # 移入 Config
         
