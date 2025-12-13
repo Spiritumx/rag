@@ -1,0 +1,62 @@
+# RAG + Classifier Evaluation Pipeline Configuration
+
+# Classifier settings
+classifier:
+  base_model_path: "/root/autodl-tmp/model/Qwen2.5-3B-Instruct"
+  lora_adapter_path: "/root/autodl-tmp/output/Qwen2.5-3B-RAG-Router/lora_model"
+  max_seq_length: 2048
+  temperature: 0.01
+  max_new_tokens: 256
+  device: "cuda"
+
+# LLM settings (Llama 3-8B)
+llm:
+  model_name: "meta-llama/Meta-Llama-3-8B-Instruct"
+  model_path: "/root/autodl-tmp/model/Meta-Llama-3-8B-Instruct"
+  server_host: "localhost"
+  server_port: 8000
+  max_length: 200
+  temperature: 1.0
+  auto_start_server: false  # Set to true to auto-start Llama server
+
+# Retriever settings
+retriever:
+  host: "localhost"
+  port: 8001
+  timeout: 30
+  max_retries: 10
+
+# Datasets to process
+datasets:
+  - squad
+  - hotpotqa
+  - trivia
+  - nq
+  - musique
+  - 2wikimultihopqa
+
+# Data paths
+data:
+  base_path: "processed_data"
+  test_file: "test_subsampled.jsonl"
+
+# Action mapping
+actions:
+  Z: "zero_retrieval"          # Zero retrieval (direct LLM)
+  S-Sparse: "single_bm25"       # Single-hop BM25
+  S-Dense: "single_hnsw"        # Single-hop HNSW
+  S-Hybrid: "single_hybrid"     # Single-hop Hybrid
+  M: "multi_hop"                # Multi-hop (IRCoT)
+
+# Output paths
+outputs:
+  stage1_dir: "evaluate/outputs/stage1_classifications"
+  stage2_dir: "evaluate/outputs/stage2_predictions"
+  stage3_dir: "evaluate/outputs/stage3_metrics"
+
+# Execution settings
+execution:
+  batch_size: 1                 # Process questions one at a time
+  resume: true                  # Resume from last checkpoint
+  service_check: true           # Validate services before running
+  log_file: "evaluate/pipeline.log"

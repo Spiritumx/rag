@@ -166,12 +166,19 @@ class LLMClientGenerator:
             "flan-t5-xl",
             "flan-t5-xxl",
             "ul2",
+            # Llama models
+            "Meta-Llama-3-8B-Instruct",
+            "Meta-Llama-3-70B-Instruct",
+            "Meta-Llama-3-8B-Instruct",
+            "Meta-Llama-3-70B-Instruct",
         ]
         model_name_ = model_name
         if "/" in model_name:
             assert model_name.count("/", 1)
             model_name_ = model_name.split("/")[1]
-        assert model_name_ in valid_model_names, f"Model name {model_name_} not in {valid_model_names}"
+        # Allow model names not in the list (for flexibility with custom models)
+        if model_name_ not in valid_model_names:
+            print(f"Warning: Model {model_name_} not in validated list. Proceeding anyway.")
 
         self.model_name = model_name
         self.max_input = max_input
