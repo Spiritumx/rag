@@ -6,7 +6,6 @@ Based on classifier/train/evaluate.py
 import os
 import re
 import torch
-import torch.nn.utils.rnn as rnn_utils
 
 # Force offline mode (same as classifier/train/evaluate.py)
 os.environ["HF_HUB_OFFLINE"] = "1"
@@ -203,11 +202,22 @@ Action: <Z/S-Sparse/S-Dense/S-Hybrid/M>"""
             input_ids_list.append(input_ids[0])  # Extract [seq_len]
 
         # 3. Padding to unified length (left padding for decoder-only models)
-        padded_inputs = rnn_utils.pad_sequence(
-            input_ids_list,
-            batch_first=True,
-            padding_value=self.tokenizer.pad_token_id
-        )
+        # Manual left padding (pad_sequence does right padding by default)
+        max_length = max(len(ids) for ids in input_ids_list)
+        padded_inputs = []
+        for ids in input_ids_list:
+            padding_length = max_length - len(ids)
+            # Left padding: add padding tokens at the beginning
+            if padding_length > 0:
+                padded = torch.cat([
+                    torch.full((padding_length,), self.tokenizer.pad_token_id, dtype=ids.dtype),
+                    ids
+                ])
+            else:
+                padded = ids
+            padded_inputs.append(padded)
+
+        padded_inputs = torch.stack(padded_inputs)
 
         # 4. Create attention_mask (critical!)
         attention_mask = (padded_inputs != self.tokenizer.pad_token_id).long()
