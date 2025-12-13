@@ -6,6 +6,7 @@ Based on classifier/train/evaluate.py
 import os
 import re
 import torch
+import torch.nn.utils.rnn as rnn_utils
 
 # Force offline mode (same as classifier/train/evaluate.py)
 os.environ["HF_HUB_OFFLINE"] = "1"
@@ -167,7 +168,7 @@ Action: <Z/S-Sparse/S-Dense/S-Hybrid/M>"""
 
     def classify_batch(self, questions: list):
         """
-        Classify multiple questions.
+        Classify multiple questions using GPU batch inference.
 
         Args:
             questions: List of question texts
@@ -175,9 +176,73 @@ Action: <Z/S-Sparse/S-Dense/S-Hybrid/M>"""
         Returns:
             List of classification results
         """
-        results = []
+        if self.model is None or self.tokenizer is None:
+            raise RuntimeError("Model not loaded. Call load_model() first.")
+
+        if not questions:
+            return []
+
+        # 1. Batch construct messages
+        all_messages = []
         for question in questions:
-            result = self.classify_question(question)
-            results.append(result)
+            messages = [
+                {"role": "system", "content": self.system_prompt},
+                {"role": "user", "content": question}
+            ]
+            all_messages.append(messages)
+
+        # 2. Batch tokenize (apply_chat_template individually, then combine)
+        input_ids_list = []
+        for messages in all_messages:
+            input_ids = self.tokenizer.apply_chat_template(
+                messages,
+                tokenize=True,
+                add_generation_prompt=True,
+                return_tensors="pt"
+            )
+            input_ids_list.append(input_ids[0])  # Extract [seq_len]
+
+        # 3. Padding to unified length (left padding for decoder-only models)
+        padded_inputs = rnn_utils.pad_sequence(
+            input_ids_list,
+            batch_first=True,
+            padding_value=self.tokenizer.pad_token_id
+        )
+
+        # 4. Create attention_mask (critical!)
+        attention_mask = (padded_inputs != self.tokenizer.pad_token_id).long()
+
+        # 5. Record input length for each sample (for decoding)
+        input_lengths = [len(ids) for ids in input_ids_list]
+
+        # 6. Batch generation
+        with torch.no_grad():
+            outputs = self.model.generate(
+                padded_inputs.to(self.device),
+                attention_mask=attention_mask.to(self.device),
+                max_new_tokens=self.config['classifier']['max_new_tokens'],
+                temperature=self.config['classifier']['temperature'],
+                use_cache=True,
+                pad_token_id=self.tokenizer.pad_token_id,
+                eos_token_id=self.tokenizer.eos_token_id
+            )
+
+        # 7. Batch decode (only the generated part)
+        results = []
+        for i in range(len(questions)):
+            # Extract only the generated tokens
+            generated_tokens = outputs[i][input_lengths[i]:]
+            response = self.tokenizer.decode(
+                generated_tokens,
+                skip_special_tokens=True
+            )
+
+            # Parse action
+            action = self.parse_action(response)
+
+            results.append({
+                'action': action,
+                'full_response': response
+            })
 
         return results

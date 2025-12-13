@@ -5,6 +5,9 @@ Classify all test questions using the trained Qwen 2.5-3B LoRA classifier.
 
 import os
 import sys
+import time
+import threading
+import queue
 from tqdm import tqdm
 from collections import Counter
 
@@ -58,7 +61,7 @@ class Stage1Classifier:
 
     def classify_dataset(self, dataset_name: str):
         """
-        Classify all questions in a dataset.
+        Classify all questions in a dataset using batch inference.
 
         Args:
             dataset_name: Name of the dataset to process
@@ -75,49 +78,126 @@ class Stage1Classifier:
         print(f"Already processed: {len(processed_qids)}")
         print(f"Remaining: {len(test_data) - len(processed_qids)}")
 
-        # Process each question
+        # Filter unprocessed data
+        unprocessed_data = [
+            item for item in test_data
+            if item['question_id'] not in processed_qids
+        ]
+
+        if not unprocessed_data:
+            print("✓ All questions already processed!")
+            self.print_action_distribution(existing_results)
+            return
+
         results = existing_results.copy()
+        batch_size = self.config['execution'].get('batch_size', 16)
+        checkpoint_frequency = self.config['execution'].get('checkpoint_frequency', 5)
 
-        for item in tqdm(test_data, desc=f"Classifying {dataset_name}"):
-            qid = item['question_id']
+        # Create async saver thread
+        save_queue = queue.Queue()
 
-            # Skip if already processed
-            if qid in processed_qids:
-                continue
+        def async_saver():
+            """Background saver thread"""
+            while True:
+                item = save_queue.get()
+                if item is None:  # Termination signal
+                    break
+                dataset, results_snapshot = item
+                self.result_manager.save_stage1_results(dataset, results_snapshot)
+                save_queue.task_done()
 
-            question_text = item['question_text']
+        save_thread = threading.Thread(target=async_saver, daemon=True)
+        save_thread.start()
 
-            # Run classifier
-            try:
-                classification = self.classifier_loader.classify_question(question_text)
+        # Batch processing
+        total_batches = (len(unprocessed_data) + batch_size - 1) // batch_size
+        start_time = time.time()
+        processed_count = 0
 
-                # Save result
-                results[qid] = {
-                    'question_id': qid,
-                    'question_text': question_text,
-                    'predicted_action': classification['action'],
-                    'full_response': classification['full_response'],
-                    'dataset': dataset_name
-                }
+        with tqdm(total=len(unprocessed_data),
+                  desc=f"Classifying {dataset_name}",
+                  unit="q") as pbar:
 
-                # Save checkpoint every 10 questions
-                if len(results) % 10 == 0:
-                    self.result_manager.save_stage1_results(dataset_name, results)
+            for batch_idx in range(0, len(unprocessed_data), batch_size):
+                batch_data = unprocessed_data[batch_idx:batch_idx + batch_size]
 
-            except Exception as e:
-                print(f"\nError classifying {qid}: {e}")
-                # Save Unknown classification for failed questions
-                results[qid] = {
-                    'question_id': qid,
-                    'question_text': question_text,
-                    'predicted_action': 'Unknown',
-                    'full_response': f"Error: {str(e)}",
-                    'dataset': dataset_name
-                }
+                # Extract question texts and IDs
+                batch_questions = [item['question_text'] for item in batch_data]
+                batch_qids = [item['question_id'] for item in batch_data]
+
+                try:
+                    # Batch inference (critical optimization)
+                    batch_results = self.classifier_loader.classify_batch(batch_questions)
+
+                    # Save results
+                    for item, classification in zip(batch_data, batch_results):
+                        results[item['question_id']] = {
+                            'question_id': item['question_id'],
+                            'question_text': item['question_text'],
+                            'predicted_action': classification['action'],
+                            'full_response': classification['full_response'],
+                            'dataset': dataset_name
+                        }
+
+                    processed_count += len(batch_data)
+
+                    # Async save checkpoint (every N batches)
+                    if (batch_idx // batch_size) % checkpoint_frequency == 0:
+                        save_queue.put((dataset_name, results.copy()))
+
+                    # Update progress bar
+                    pbar.update(len(batch_data))
+
+                    # Calculate and display speed
+                    elapsed = time.time() - start_time
+                    speed = processed_count / elapsed if elapsed > 0 else 0
+                    remaining_time = (len(unprocessed_data) - processed_count) / speed if speed > 0 else 0
+
+                    pbar.set_postfix({
+                        'speed': f'{speed:.2f} q/s',
+                        'eta': f'{remaining_time:.0f}s',
+                        'batch': f'{batch_idx//batch_size + 1}/{total_batches}'
+                    })
+
+                except Exception as e:
+                    print(f"\n❌ Error processing batch {batch_idx//batch_size}: {e}")
+                    # Fallback: process failed batch one by one
+                    print(f"   Falling back to single-question processing for this batch...")
+                    for item in batch_data:
+                        try:
+                            classification = self.classifier_loader.classify_question(
+                                item['question_text']
+                            )
+                            results[item['question_id']] = {
+                                'question_id': item['question_id'],
+                                'question_text': item['question_text'],
+                                'predicted_action': classification['action'],
+                                'full_response': classification['full_response'],
+                                'dataset': dataset_name
+                            }
+                        except Exception as e2:
+                            print(f"   Error on {item['question_id']}: {e2}")
+                            results[item['question_id']] = {
+                                'question_id': item['question_id'],
+                                'question_text': item['question_text'],
+                                'predicted_action': 'Unknown',
+                                'full_response': f"Error: {str(e2)}",
+                                'dataset': dataset_name
+                            }
+
+                        processed_count += 1
+                        pbar.update(1)
 
         # Final save
-        self.result_manager.save_stage1_results(dataset_name, results)
+        save_queue.put((dataset_name, results.copy()))
+        save_queue.put(None)  # Termination signal
+        if save_thread:
+            save_thread.join()  # Wait for save to complete
+
+        total_time = time.time() - start_time
         print(f"\n✓ Classification complete for {dataset_name}")
+        print(f"  Total time: {total_time:.2f}s")
+        print(f"  Average speed: {processed_count / total_time:.2f} q/s")
         print(f"  Output saved to: {output_path}")
 
         # Print action distribution
