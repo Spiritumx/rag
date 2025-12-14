@@ -17,7 +17,7 @@ local prompt_reader_args = {
     "estimated_generation_length": 0, # don't drop in reading phase.
     "shuffle": false,
     "model_length_limit": 1000000, # don't drop in reading phase.
-    "tokenizer_model_name": "google/flan-t5-xxl",
+    "tokenizer_model_name": std.extVar("TOKENIZER_MODEL_NAME"),
 };
 
 # (Potentially) Hyper-parameters:

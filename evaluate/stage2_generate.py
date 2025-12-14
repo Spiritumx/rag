@@ -217,9 +217,12 @@ class Stage2Generator:
         # Set environment variables
         env = os.environ.copy()
 
-        # Force offline mode (prevent HuggingFace Hub access)
-        env['HF_HUB_OFFLINE'] = '1'
-        env['TRANSFORMERS_OFFLINE'] = '1'
+        # Note: Removed forced offline mode to allow model loading from cache/hub
+        # If you want offline mode, ensure all models are cached first
+
+        # Set tokenizer model (use Llama tokenizer instead of flan-t5)
+        tokenizer_path = self.config['llm'].get('model_path', '/root/autodl-tmp/model/Meta-Llama-3-8B-Instruct')
+        env['TOKENIZER_MODEL_NAME'] = tokenizer_path
 
         # Service endpoints (add http:// prefix if not present)
         retriever_host = self.config['retriever']['host']
