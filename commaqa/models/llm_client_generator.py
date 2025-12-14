@@ -202,6 +202,9 @@ class LLMClientGenerator:
         """
         prompt = prompt.rstrip()
 
+        # Use TOKENIZER_MODEL_NAME from environment if available, otherwise fall back to model_name
+        tokenizer_model_name = os.environ.get('TOKENIZER_MODEL_NAME', self.model_name)
+
         prompt = fit_prompt_into_given_limit(
             original_prompt=prompt,
             model_length_limit=self.model_tokens_limit,
@@ -209,7 +212,7 @@ class LLMClientGenerator:
             demonstration_delimiter="\n\n\n",
             shuffle=False,
             remove_method=self.remove_method,
-            tokenizer_model_name=self.model_name,
+            tokenizer_model_name=tokenizer_model_name,
             last_is_test_example=True,
         )
 
