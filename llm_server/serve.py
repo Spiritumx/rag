@@ -225,6 +225,11 @@ async def generate(
     }
 
 
-print("\nLoading model and tokenizer.")
-get_model_and_tokenizer()
-print("Loaded model and tokenizer.\n")
+if __name__ == "__main__":
+    import uvicorn
+    print("\nLoading model and tokenizer.")
+    get_model_and_tokenizer()
+    print("Loaded model and tokenizer.\n")
+
+    port = int(os.environ.get("LLM_PORT", "8000"))
+    uvicorn.run(app, host="0.0.0.0", port=port)

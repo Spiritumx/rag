@@ -214,3 +214,9 @@ async def retrieve(request: Request):  # see the corresponding method in unified
             "traceback": traceback.format_exc()
         }
         raise HTTPException(status_code=500, detail=error_detail)
+
+
+if __name__ == "__main__":
+    import uvicorn
+    port = int(os.environ.get("RETRIEVER_PORT", "8001"))
+    uvicorn.run(app, host="0.0.0.0", port=port)
