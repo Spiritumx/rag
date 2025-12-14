@@ -63,6 +63,7 @@ accelerate = "*"
 sentence-transformers = "*"
 triton = "*"
 ftfy = "*"
+nltk = "*"
 
 # 仅在 Linux 上注入 LD_LIBRARY_PATH
 [target.linux-64.activation]
@@ -85,6 +86,7 @@ peft = "*"
 accelerate = "*"
 bitsandbytes = "*"
 ftfy = "*"
+nltk = "*"
 
 [activation.env]
 UNSLOTH_RETURN_LOGITS = "1"
