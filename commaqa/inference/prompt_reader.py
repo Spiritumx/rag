@@ -13,7 +13,12 @@ def get_tokenizer(model_name):
     from transformers import AutoTokenizer
 
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
-    return AutoTokenizer.from_pretrained(model_name)
+    # Use local files only to avoid network requests
+    return AutoTokenizer.from_pretrained(
+        model_name,
+        local_files_only=True,
+        trust_remote_code=True
+    )
 
 
 def read_prompt(
