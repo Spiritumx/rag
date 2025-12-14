@@ -229,8 +229,8 @@ class Stage2Generator:
         cmd = [
             'python', '-m', 'commaqa.inference.configurable_inference',
             '--config', config_path,
-            '--input_file', input_file,
-            '--output_file', temp_output.name,
+            '--input', input_file,
+            '--output', temp_output.name,
         ]
 
         print(f"    Running: {' '.join(cmd[:4])} ...")
