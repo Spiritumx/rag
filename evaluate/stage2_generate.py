@@ -178,17 +178,13 @@ class Stage2Generator:
         for qid in qids:
             if qid in test_data_map:
                 item = test_data_map[qid]
-                # Convert to format expected by configurable_inference
+                # Convert to format expected by dataset_readers.py
                 inference_item = {
-                    'qid': item['question_id'],
-                    'question': item['question_text'],
-                    'query': item['question_text'],
+                    'question_id': item['question_id'],
+                    'question_text': item['question_text'],
+                    'answers_objects': item.get('answers_objects', []),
+                    'contexts': item.get('contexts', []),
                 }
-                # Add contexts if available (for datasets that have them)
-                if 'contexts' in item:
-                    inference_item['paras'] = [
-                        ctx['paragraph_text'] for ctx in item['contexts']
-                    ]
 
                 temp_file.write(json.dumps(inference_item, ensure_ascii=False) + '\n')
 
