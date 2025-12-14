@@ -260,7 +260,10 @@ class Stage2Generator:
 
             if result.returncode != 0:
                 print(f"    Error: Inference failed with return code {result.returncode}")
-                print(f"    STDERR: {result.stderr[:500]}")
+                print(f"    STDERR (full output):")
+                print(result.stderr)
+                print(f"    STDOUT:")
+                print(result.stdout)
                 return {}
 
             # Load predictions
