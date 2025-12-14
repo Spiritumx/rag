@@ -65,6 +65,7 @@ accelerate = "*"
 sentence-transformers = "*"
 triton = "*"
 ftfy = "*"
+pandas = "*"
 
 # 仅在 Linux 上注入 LD_LIBRARY_PATH
 [target.linux-64.activation]
@@ -77,7 +78,7 @@ torch = "*"
 torchvision = "*"
 torchaudio = "*"
 
-unsloth = "*" 
+unsloth = "*"
 # unsloth = { git = "https://github.com/unslothai/unsloth.git" } # 有时 git 版反而兼容性好点，视情况而定
 
 # 其他辅助库
@@ -87,6 +88,7 @@ peft = "*"
 accelerate = "*"
 bitsandbytes = "*"
 ftfy = "*"
+pandas = "*"
 
 [activation.env]
 UNSLOTH_RETURN_LOGITS = "1"
