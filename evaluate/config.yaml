@@ -22,7 +22,7 @@ llm:
 # Retriever settings
 retriever:
   host: "localhost"
-  port: 9200 
+  port: 8001 
   timeout: 30
   max_retries: 10
 
