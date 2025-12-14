@@ -225,10 +225,17 @@ class Stage2Generator:
         env['HF_HUB_OFFLINE'] = '1'
         env['TRANSFORMERS_OFFLINE'] = '1'
 
-        # Service endpoints
-        env['RETRIEVER_HOST'] = self.config['retriever']['host']
+        # Service endpoints (add http:// prefix if not present)
+        retriever_host = self.config['retriever']['host']
+        if not retriever_host.startswith('http'):
+            retriever_host = f'http://{retriever_host}'
+        env['RETRIEVER_HOST'] = retriever_host
         env['RETRIEVER_PORT'] = str(self.config['retriever']['port'])
-        env['LLM_SERVER_HOST'] = self.config['llm']['server_host']
+
+        llm_host = self.config['llm']['server_host']
+        if not llm_host.startswith('http'):
+            llm_host = f'http://{llm_host}'
+        env['LLM_SERVER_HOST'] = llm_host
         env['LLM_SERVER_PORT'] = str(self.config['llm']['server_port'])
 
         # Build command

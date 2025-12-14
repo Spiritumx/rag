@@ -42,6 +42,8 @@ jsonlines = ">=4.0.0,<5"
 # 解决 datasets 依赖冲突的通用配置
 fsspec = "<=2025.9.0"
 tensorboard = ">=2.20.0,<3"
+spacy = "*"
+nltk = "*"
 
 [target.linux-64.dependencies]
 cuda-version = "13.0.*"
@@ -63,7 +65,6 @@ accelerate = "*"
 sentence-transformers = "*"
 triton = "*"
 ftfy = "*"
-nltk = "*"
 
 # 仅在 Linux 上注入 LD_LIBRARY_PATH
 [target.linux-64.activation]
@@ -86,7 +87,6 @@ peft = "*"
 accelerate = "*"
 bitsandbytes = "*"
 ftfy = "*"
-nltk = "*"
 
 [activation.env]
 UNSLOTH_RETURN_LOGITS = "1"
