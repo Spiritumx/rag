@@ -21,11 +21,11 @@ local add_pinned_paras = false;
             "prompt_reader_args": {
                 "shuffle": false,
                 "model_length_limit": 1000000,
-                "tokenizer_model_name": "meta-llama/Meta-Llama-3-8B-Instruct",
+                "tokenizer_model_name": "/root/autodl-tmp/model/Meta-Llama-3-8B-Instruct",
             },
             "end_state": "[EOQ]",
             "gen_model": "llm_api",
-            "model_name": "meta-llama/Meta-Llama-3-8B-Instruct",
+            "model_name": "Meta-Llama-3-8B-Instruct",
             "model_tokens_limit": 8000,
             "max_length": 200,
             "add_context": false,

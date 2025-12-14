@@ -220,6 +220,12 @@ class Stage2Generator:
 
         # Set environment variables
         env = os.environ.copy()
+
+        # Force offline mode (prevent HuggingFace Hub access)
+        env['HF_HUB_OFFLINE'] = '1'
+        env['TRANSFORMERS_OFFLINE'] = '1'
+
+        # Service endpoints
         env['RETRIEVER_HOST'] = self.config['retriever']['host']
         env['RETRIEVER_PORT'] = str(self.config['retriever']['port'])
         env['LLM_SERVER_HOST'] = self.config['llm']['server_host']
