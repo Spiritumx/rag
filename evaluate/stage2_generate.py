@@ -245,16 +245,37 @@ class Stage2Generator:
             '--output', temp_output.name,
         ]
 
-        print(f"    Running: {' '.join(cmd[:4])} ...")
+        # Add parallel processing if configured
+        parallel_threads = self.config.get('execution', {}).get('parallel_threads', 1)
+        if parallel_threads > 1:
+            cmd.extend(['--threads', str(parallel_threads)])
+
+        print(f"    Running: {' '.join(cmd[:4])} ... (threads: {parallel_threads})")
 
         try:
             # Run inference
+            # Calculate dynamic timeout based on number of questions and parallelism
+            # M action: ~5 min/question, others: ~10 sec/question
+            questions_count = len(unprocessed_qids)
+            if action == 'M':
+                base_time_per_question = 300  # 5 min per question
+            else:
+                base_time_per_question = 20   # 20 sec per question
+
+            # Adjust for parallelism (with overhead factor)
+            parallel_efficiency = 0.7  # Assume 70% efficiency due to overhead
+            estimated_time = (questions_count * base_time_per_question) / (parallel_threads * parallel_efficiency)
+            timeout = max(int(estimated_time * 1.5), 600)  # 1.5x buffer, at least 10 minutes
+
+            speedup = parallel_threads * parallel_efficiency
+            print(f"    Estimated time: {estimated_time//60:.1f} min (timeout: {timeout//60:.1f} min, speedup: {speedup:.1f}x)")
+
             result = subprocess.run(
                 cmd,
                 env=env,
                 capture_output=True,
                 text=True,
-                timeout=3600  # 1 hour timeout per action group
+                timeout=timeout
             )
 
             if result.returncode != 0:

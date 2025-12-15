@@ -61,3 +61,7 @@ execution:
   resume: true                  # Resume from last checkpoint
   service_check: true           # Validate services before running
   log_file: "evaluate/pipeline.log"
+
+  # Parallel processing settings
+  parallel_threads: 4           # Number of parallel threads for inference (4-8 recommended)
+  # Note: Too many threads may cause GPU OOM or service overload
