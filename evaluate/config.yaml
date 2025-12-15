@@ -63,6 +63,7 @@ execution:
   log_file: "evaluate/pipeline.log"
 
   # Parallel processing settings
-  parallel_threads: 8           # Number of parallel threads for inference (4-8 recommended)
-  # Note: Current GPU has 10GB free, can handle 8 threads
-  # Adjust if you see OOM errors
+  parallel_threads: 8           # For vLLM: 8-16 threads (supports batch processing)
+                                # For standard server: 4 threads (sequential processing)
+  # vLLM benefits: automatic batching, higher throughput with more threads
+  # Standard server: best with 4 threads for GPU saturation

@@ -66,6 +66,7 @@ sentence-transformers = "*"
 triton = "*"
 ftfy = "*"
 pandas = "*"
+vllm = ">=0.6.0"
 
 # 仅在 Linux 上注入 LD_LIBRARY_PATH
 [target.linux-64.activation]
