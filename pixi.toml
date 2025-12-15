@@ -66,8 +66,8 @@ sentence-transformers = "*"
 triton = "*"
 ftfy = "*"
 pandas = "*"
-# vLLM for high-throughput batch inference
-vllm = { version = ">=0.6.0", index = "https://download.pytorch.org/whl/cu130" }
+# vLLM for high-throughput batch inference (uses pre-built PyPI wheels)
+vllm = ">=0.6.0"
 
 # 仅在 Linux 上注入 LD_LIBRARY_PATH
 [target.linux-64.activation]
@@ -94,3 +94,6 @@ pandas = "*"
 
 [activation.env]
 UNSLOTH_RETURN_LOGITS = "1"
+# vLLM: Skip building extensions, use pre-built wheels
+VLLM_INSTALL_PUNICA_KERNELS = "0"
+VLLM_TARGET_DEVICE = "cuda"
