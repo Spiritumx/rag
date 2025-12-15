@@ -94,6 +94,3 @@ pandas = "*"
 
 [activation.env]
 UNSLOTH_RETURN_LOGITS = "1"
-# vLLM: Skip building extensions, use pre-built wheels
-VLLM_INSTALL_PUNICA_KERNELS = "0"
-VLLM_TARGET_DEVICE = "cuda"
