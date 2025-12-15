@@ -239,9 +239,9 @@ class Stage2Generator:
         env['LLM_SERVER_HOST'] = llm_host
         env['LLM_SERVER_PORT'] = str(self.config['llm']['server_port'])
 
-        # Build command
+        # Build command (use current Python interpreter to ensure pixi env)
         cmd = [
-            'python', '-m', 'commaqa.inference.configurable_inference',
+            sys.executable, '-m', 'commaqa.inference.configurable_inference',
             '--config', config_path,
             '--input', input_file,
             '--output', temp_output.name,
