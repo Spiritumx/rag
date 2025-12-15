@@ -21,6 +21,8 @@ cuda = "13.0"
 
 [dependencies]
 python = ">=3.11,<3.13"
+cmake = "*"
+ninja = "*"
 # cuda-version = "13.0.*" 
 # cuda-toolkit = "13.0.*"
 cudnn = "*"
@@ -67,7 +69,7 @@ triton = "*"
 ftfy = "*"
 pandas = "*"
 # vLLM for high-throughput batch inference (uses pre-built PyPI wheels)
-vllm = { version = "*", index = "https://download.pytorch.org/whl/cu129" }
+vllm = "*" 
 
 # 仅在 Linux 上注入 LD_LIBRARY_PATH
 [target.linux-64.activation]
