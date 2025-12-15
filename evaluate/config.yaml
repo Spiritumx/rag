@@ -63,5 +63,6 @@ execution:
   log_file: "evaluate/pipeline.log"
 
   # Parallel processing settings
-  parallel_threads: 4           # Number of parallel threads for inference (4-8 recommended)
-  # Note: Too many threads may cause GPU OOM or service overload
+  parallel_threads: 8           # Number of parallel threads for inference (4-8 recommended)
+  # Note: Current GPU has 10GB free, can handle 8 threads
+  # Adjust if you see OOM errors
