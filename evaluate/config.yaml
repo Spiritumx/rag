@@ -58,7 +58,7 @@ outputs:
 execution:
   batch_size: 16                # GPU batch size for inference (16-32 recommended for 30GB GPU)
   checkpoint_frequency: 5       # Save checkpoint every N batches
-  resume: true                  # Resume from last checkpoint
+  resume: false                 # Resume from last checkpoint (set to true to skip completed)
   service_check: true           # Validate services before running
   log_file: "evaluate/pipeline.log"
 

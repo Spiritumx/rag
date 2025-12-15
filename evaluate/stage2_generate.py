@@ -130,7 +130,8 @@ class Stage2Generator:
                     config_path=config_path,
                     input_file=temp_input_file,
                     dataset_name=dataset_name,
-                    action=action
+                    action=action,
+                    num_questions=len(unprocessed_qids)
                 )
 
                 # Merge predictions
@@ -191,7 +192,7 @@ class Stage2Generator:
         temp_file.close()
         return temp_file.name
 
-    def run_inference(self, config_path: str, input_file: str, dataset_name: str, action: str) -> dict:
+    def run_inference(self, config_path: str, input_file: str, dataset_name: str, action: str, num_questions: int) -> dict:
         """
         Run configurable_inference using subprocess.
 
@@ -200,6 +201,7 @@ class Stage2Generator:
             input_file: Path to input JSONL file
             dataset_name: Name of dataset
             action: Action label
+            num_questions: Number of questions to process
 
         Returns:
             Dictionary of predictions {qid: answer}
@@ -256,7 +258,7 @@ class Stage2Generator:
             # Run inference
             # Calculate dynamic timeout based on number of questions and parallelism
             # M action: ~5 min/question, others: ~10 sec/question
-            questions_count = len(unprocessed_qids)
+            questions_count = num_questions
             if action == 'M':
                 base_time_per_question = 300  # 5 min per question
             else:
