@@ -15,20 +15,25 @@
 ## 步骤1：安装依赖
 
 ```bash
-pip install unsloth transformers peft torch pyyaml tqdm requests vllm
+pip install unsloth transformers peft torch pyyaml tqdm requests fastapi uvicorn
 ```
 
 ## 步骤2：启动服务
 
-### 终端1：启动Llama服务器
+### 终端1：启动Llama服务器（自动批处理）
 
 ```bash
-python -m vllm.entrypoints.api_server \
-    --model /root/autodl-tmp/model/Meta-Llama-3-8B-Instruct \
-    --host localhost \
-    --port 8000 \
-    --dtype auto
+# 推荐：使用自动批处理服务器（最佳性能）
+bash start_llm_autobatch.sh
+
+# 或使用基础批处理服务器
+bash start_llm_server.sh
 ```
+
+**自动批处理的优势：**
+- 自动收集并发请求并批量处理
+- GPU利用率提升至95-100%
+- 相比单请求处理可获得3-5x加速
 
 ### 终端2：确保检索服务运行
 

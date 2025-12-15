@@ -63,7 +63,5 @@ execution:
   log_file: "evaluate/pipeline.log"
 
   # Parallel processing settings
-  parallel_threads: 8           # For vLLM: 8-16 threads (supports batch processing)
-                                # For standard server: 4 threads (sequential processing)
-  # vLLM benefits: automatic batching, higher throughput with more threads
-  # Standard server: best with 4 threads for GPU saturation
+  parallel_threads: 12          # Increased for better GPU utilization
+                                # Monitor GPU usage and adjust (try 12, 16, or back to 8)

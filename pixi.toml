@@ -67,9 +67,7 @@ accelerate = "*"
 sentence-transformers = "*"
 triton = "*"
 ftfy = "*"
-pandas = "*"
-# vLLM for high-throughput batch inference (uses pre-built PyPI wheels)
-vllm = "*" 
+pandas = "*" 
 
 # 仅在 Linux 上注入 LD_LIBRARY_PATH
 [target.linux-64.activation]

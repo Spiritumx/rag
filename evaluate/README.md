@@ -46,9 +46,7 @@ evaluate/
 ```bash
 pip install unsloth transformers peft torch
 pip install pyyaml tqdm requests
-pip install vllm  # 推荐用于Llama服务
-# 或者
-pip install fastapi uvicorn  # 备选方案
+pip install fastapi uvicorn  # 用于LLM服务器
 ```
 
 ## 配置
@@ -86,17 +84,23 @@ datasets:
 
 ### 1. 启动必要的服务
 
-#### 启动Llama服务器（选项A - vLLM，推荐）
+#### 启动Llama服务器（推荐：自动批处理版本）
 
 ```bash
-python -m vllm.entrypoints.api_server \
-    --model /root/autodl-tmp/model/Meta-Llama-3-8B-Instruct \
-    --host localhost \
-    --port 8000 \
-    --dtype auto
+# 使用自动批处理服务器（最佳性能）
+bash start_llm_autobatch.sh
+
+# 或使用基础批处理服务器
+bash start_llm_server.sh
 ```
 
-#### 启动Llama服务器（选项B - FastAPI）
+**推荐使用自动批处理版本**，它会：
+- 自动收集并发请求并批量处理
+- 大幅提升GPU利用率（95-100%）
+- 相比单请求处理可获得 3-5x 加速
+- 完全透明，无需修改客户端代码
+
+#### 启动Llama服务器（备选：基础FastAPI）
 
 ```bash
 uvicorn evaluate.utils.llama_fastapi_server:app \

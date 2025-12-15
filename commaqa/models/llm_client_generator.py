@@ -253,3 +253,84 @@ class LLMClientGenerator:
         # TODO: Deal with output-probabilities if needed.
 
         return sorted(output_seq_score, key=lambda x: x[1])
+
+
+def batch_llm_call(
+    prompts: list,
+    model_name: str,
+    max_input=None,
+    max_length=100,
+    min_length=1,
+    do_sample=False,
+    temperature=1.0,
+    top_k=50,
+    top_p=1.0,
+    repetition_penalty=None,
+    length_penalty=None,
+    keep_prompt=False,
+):
+    """
+    Batch LLM call - send multiple prompts at once for better GPU utilization.
+
+    Args:
+        prompts: List of prompt strings
+        model_name: Model name
+        **kwargs: Same as llm_call
+
+    Returns:
+        List of results, one per prompt
+    """
+    if not prompts:
+        return []
+
+    # Prepare request body
+    body = {
+        "prompts": prompts,
+        "max_input": max_input,
+        "max_length": max_length,
+        "min_length": min_length,
+        "do_sample": do_sample,
+        "temperature": temperature,
+        "top_k": top_k,
+        "top_p": top_p,
+        "repetition_penalty": repetition_penalty,
+        "length_penalty": length_penalty,
+        "keep_prompt": keep_prompt,
+    }
+
+    host = os.environ.get("LLM_SERVER_HOST", None)
+    port = os.environ.get("LLM_SERVER_PORT", None)
+
+    if "/" in model_name:
+        assert model_name.count("/", 1)
+        model_name = model_name.split("/")[1]
+
+    llm_server_key_suffix = os.environ.get("LLM_SERVER_KEY_SUFFIX", "")
+    if model_name.replace("-", "_") + "_LLM_SERVER_HOST" in os.environ:
+        host = os.environ[model_name.replace("-", "_") + "_LLM_SERVER_HOST" + llm_server_key_suffix]
+    if model_name.replace("-", "_") + "_LLM_SERVER_PORT" in os.environ:
+        port = os.environ[model_name.replace("-", "_") + "_LLM_SERVER_PORT" + llm_server_key_suffix]
+
+    # Use POST for batch requests
+    response = requests.post(
+        host + ":" + str(port) + "/generate_batch",
+        json=body,
+        timeout=300  # 5 min timeout for batch
+    )
+
+    if response.status_code != 200:
+        raise Exception(f"Batch LLM Generation request failed: {response.status_code}")
+
+    result = response.json()
+
+    # Convert to list of individual results
+    batch_size = len(prompts)
+    results = []
+    for i in range(batch_size):
+        results.append({
+            "generated_texts": [result["generated_texts"][i]],
+            "generated_num_tokens": [result["generated_num_tokens"][i]],
+            "model_name": result["model_name"],
+        })
+
+    return results
