@@ -26,6 +26,7 @@ ninja = "*"
 # cuda-version = "13.0.*" 
 # cuda-toolkit = "13.0.*"
 cudnn = "*"
+pip = "*"
 
 jsonnet = ">=0.21.0,<0.22"
 rapidfuzz = ">=3.14.1,<4"
