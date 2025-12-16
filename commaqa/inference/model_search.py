@@ -186,7 +186,8 @@ class QuestionSearchBase(object):
             chain = "\n" + example["qid"] + "\n" + example["question"]
             if not silent:
                 print("\n")
-            return (example["qid"], "", chain)
+            # Return empty context for failed cases
+            return (example["qid"], "", chain, {"titles": [], "paras": []})
         else:
             data = final_state._data
             chain = "\n" + example["qid"] + "\n" + example["question"]
@@ -210,9 +211,16 @@ class QuestionSearchBase(object):
             except ValueError:
                 # Not a valid json ignore
                 pass
+
+            # Extract retrieved context (titles and paragraphs)
+            retrieved_context = {
+                "titles": data.get("titles", []),
+                "paras": data.get("paras", [])
+            }
+
             if not silent:
                 print("\n")
-            return (example["qid"], final_answer, chain)
+            return (example["qid"], final_answer, chain, retrieved_context)
 
 
 class BestFirstDecomposer(QuestionSearchBase):

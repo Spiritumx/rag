@@ -235,17 +235,26 @@ def process_batch_group(group: List[BatchRequest], model, tokenizer):
     with torch.no_grad():
         outputs = model.generate(inputs.input_ids, **gen_kwargs)
 
-    # Decode
-    generated_texts = tokenizer.batch_decode(outputs, skip_special_tokens=True)
+    # Decode - handle prompt removal at token level for accuracy
+    # Get prompt token lengths for each request in the batch
+    prompt_token_lengths = inputs.attention_mask.sum(dim=1).tolist()
 
     # Process each result
+    generated_texts_processed = []
     for i, req in enumerate(group):
-        text = generated_texts[i]
-
         if not req.keep_prompt:
-            # Remove prompt
-            text = text[len(req.prompt):].strip()
+            # Remove prompt tokens before decoding (more accurate than string slicing)
+            prompt_len = prompt_token_lengths[i]
+            output_without_prompt = outputs[i, prompt_len:]
+            text = tokenizer.decode(output_without_prompt, skip_special_tokens=True).strip()
+        else:
+            text = tokenizer.decode(outputs[i], skip_special_tokens=True).strip()
 
+        generated_texts_processed.append(text)
+
+    # Process each result with token counts
+    for i, req in enumerate(group):
+        text = generated_texts_processed[i]
         num_tokens = len(tokenizer.encode(text))
 
         result = {
@@ -297,12 +306,18 @@ def process_single_request(req: BatchRequest, model, tokenizer):
     with torch.no_grad():
         outputs = model.generate(**inputs, **gen_kwargs)
 
-    # Decode
-    generated_texts = tokenizer.batch_decode(outputs, skip_special_tokens=True)
+    # Decode - handle prompt removal at token level for accuracy
+    prompt_token_length = inputs.input_ids.shape[1]
 
     if not req.keep_prompt:
-        generated_texts = [text[len(req.prompt):].strip() for text in generated_texts]
+        # Remove prompt tokens before decoding (more accurate than string slicing)
+        outputs_without_prompt = outputs[:, prompt_token_length:]
+        generated_texts = tokenizer.batch_decode(outputs_without_prompt, skip_special_tokens=True)
+    else:
+        generated_texts = tokenizer.batch_decode(outputs, skip_special_tokens=True)
 
+    # Clean up
+    generated_texts = [text.strip() for text in generated_texts]
     generated_num_tokens = [len(tokenizer.encode(text)) for text in generated_texts]
 
     result = {

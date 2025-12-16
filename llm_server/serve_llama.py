@@ -218,12 +218,18 @@ async def generate_single(
     with torch.no_grad():
         outputs = model.generate(**inputs, **gen_kwargs)
 
-    # Decode
-    generated_texts = tokenizer.batch_decode(outputs, skip_special_tokens=True)
+    # Decode - get prompt token length for accurate removal
+    prompt_token_length = inputs.input_ids.shape[1]
 
-    # Remove prompt if needed
     if not keep_prompt:
-        generated_texts = [text[len(prompt):].strip() for text in generated_texts]
+        # Remove prompt tokens before decoding (more accurate than string slicing)
+        outputs_without_prompt = outputs[:, prompt_token_length:]
+        generated_texts = tokenizer.batch_decode(outputs_without_prompt, skip_special_tokens=True)
+    else:
+        generated_texts = tokenizer.batch_decode(outputs, skip_special_tokens=True)
+
+    # Clean up (strip whitespace)
+    generated_texts = [text.strip() for text in generated_texts]
 
     # Count tokens
     generated_num_tokens = [len(tokenizer.encode(text)) for text in generated_texts]

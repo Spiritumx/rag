@@ -176,18 +176,33 @@ def inference_mode(args, reader, decomposer, model_map, override_answer_by=None)
     end_time = time.time()
     seconds_taken = round(end_time - start_time)
 
-    predictions = {x[0]: x[1] for x in qid_answer_chains}
+    # Handle both old format (qid, answer, chain) and new format (qid, answer, chain, context)
+    if qid_answer_chains and len(qid_answer_chains[0]) == 4:
+        predictions = {x[0]: x[1] for x in qid_answer_chains}
+        contexts = {x[0]: x[3] for x in qid_answer_chains}
+        chains = [x[2] for x in qid_answer_chains]
+    else:
+        predictions = {x[0]: x[1] for x in qid_answer_chains}
+        contexts = {}
+        chains = [x[2] for x in qid_answer_chains] if qid_answer_chains else []
+
     print(f"Writing predictions in {args.output}")
     with open(args.output, "w") as output_fp:
         json.dump(predictions, output_fp, indent=4)
 
     ext_index = args.output.rfind(".")
 
+    # Save retrieved contexts
+    if contexts:
+        contexts_file = args.output[:ext_index] + "_contexts.json"
+        print(f"Writing retrieved contexts in {contexts_file}")
+        with open(contexts_file, "w") as output_fp:
+            json.dump(contexts, output_fp, indent=2)
+
     time_taken_file_path = args.output[:ext_index] + "_time_taken.txt"
     with open(time_taken_file_path, "w") as file:
         file.write(str(seconds_taken))
 
-    chains = [x[2] for x in qid_answer_chains]
     chain_tsv = args.output[:ext_index] + "_chains.txt"
     with open(chain_tsv, "w") as output_fp:
         for chain in chains:
