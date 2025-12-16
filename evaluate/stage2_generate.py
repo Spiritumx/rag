@@ -103,6 +103,8 @@ class Stage2Generator:
 
         # Process each action group
         all_predictions = existing_preds.copy()
+        all_chains = {}
+        all_contexts = {}
 
         for action, qids in action_groups.items():
             print(f"\nProcessing action: {action}")
@@ -126,7 +128,7 @@ class Stage2Generator:
                 )
 
                 # Run generation using configurable_inference
-                predictions = self.run_inference(
+                result = self.run_inference(
                     config_path=config_path,
                     input_file=temp_input_file,
                     dataset_name=dataset_name,
@@ -134,8 +136,10 @@ class Stage2Generator:
                     num_questions=len(unprocessed_qids)
                 )
 
-                # Merge predictions
-                all_predictions.update(predictions)
+                # Merge predictions, chains, and contexts
+                all_predictions.update(result['predictions'])
+                all_chains.update(result['chains'])
+                all_contexts.update(result['contexts'])
 
                 # Save checkpoint
                 self.result_manager.save_stage2_results(dataset_name, all_predictions)
@@ -144,12 +148,26 @@ class Stage2Generator:
                 if os.path.exists(temp_input_file):
                     os.remove(temp_input_file)
 
-                print(f"  ✓ Completed {len(predictions)} predictions for action {action}")
+                print(f"  ✓ Completed {len(result['predictions'])} predictions for action {action}")
 
             except Exception as e:
                 print(f"  Error processing action {action}: {e}")
                 import traceback
                 traceback.print_exc()
+
+        # Save chains and contexts
+        if all_chains:
+            chains_path = output_path.replace('.json', '_chains.txt')
+            with open(chains_path, 'w', encoding='utf-8') as f:
+                for qid in sorted(all_chains.keys()):
+                    f.write(all_chains[qid] + '\n')
+            print(f"  Chains saved to: {chains_path}")
+
+        if all_contexts:
+            contexts_path = output_path.replace('.json', '_contexts.json')
+            with open(contexts_path, 'w', encoding='utf-8') as f:
+                json.dump(all_contexts, f, indent=2, ensure_ascii=False)
+            print(f"  Contexts saved to: {contexts_path}")
 
         print(f"\n✓ Generation complete for {dataset_name}")
         print(f"  Total predictions: {len(all_predictions)}/{len(test_data)}")
@@ -204,7 +222,10 @@ class Stage2Generator:
             num_questions: Number of questions to process
 
         Returns:
-            Dictionary of predictions {qid: answer}
+            Dictionary with:
+                'predictions': {qid: answer}
+                'chains': {qid: chain}
+                'contexts': {qid: context}
         """
         # Create temp output file
         temp_output = tempfile.NamedTemporaryFile(
@@ -286,28 +307,67 @@ class Stage2Generator:
                 print(result.stderr)
                 print(f"    STDOUT:")
                 print(result.stdout)
-                return {}
+                return {'predictions': {}, 'chains': {}, 'contexts': {}}
 
             # Load predictions
+            predictions = {}
+            chains = {}
+            contexts = {}
+
             if os.path.exists(temp_output.name):
                 with open(temp_output.name, 'r', encoding='utf-8') as f:
                     predictions = json.load(f)
             else:
                 print(f"    Warning: Output file not created")
-                predictions = {}
 
-            # Cleanup
-            if os.path.exists(temp_output.name):
-                os.remove(temp_output.name)
+            # Load chains
+            chains_file = temp_output.name.replace('.json', '_chains.txt')
+            if os.path.exists(chains_file):
+                with open(chains_file, 'r', encoding='utf-8') as f:
+                    # Parse chains file - each chain starts with qid
+                    current_chain = []
+                    current_qid = None
+                    for line in f:
+                        line = line.rstrip('\n')
+                        # Each chain starts with a blank line followed by qid
+                        if line == '' and current_chain:
+                            if current_qid:
+                                chains[current_qid] = '\n'.join(current_chain)
+                            current_chain = []
+                            current_qid = None
+                        elif current_qid is None and line:
+                            # First non-empty line is the qid
+                            current_qid = line
+                            current_chain = [line]
+                        elif line:
+                            current_chain.append(line)
+                    # Don't forget the last chain
+                    if current_qid and current_chain:
+                        chains[current_qid] = '\n'.join(current_chain)
 
-            return predictions
+            # Load contexts
+            contexts_file = temp_output.name.replace('.json', '_contexts.json')
+            if os.path.exists(contexts_file):
+                with open(contexts_file, 'r', encoding='utf-8') as f:
+                    contexts = json.load(f)
+
+            # Cleanup temp files
+            for file_path in [temp_output.name, chains_file, contexts_file]:
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+
+            return {
+                'predictions': predictions,
+                'chains': chains,
+                'contexts': contexts
+            }
 
         except subprocess.TimeoutExpired:
             print(f"    Error: Inference timed out after 1 hour")
-            return {}
+            return {'predictions': {}, 'chains': {}, 'contexts': {}}
         except Exception as e:
             print(f"    Error running inference: {e}")
-            return {}
+            return {'predictions': {}, 'chains': {}, 'contexts': {}}
 
 
 def main():
