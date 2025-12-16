@@ -103,6 +103,10 @@ def get_model_and_tokenizer():
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
+    # CRITICAL: Use left padding for batched generation
+    # Right padding causes misalignment between prompt and generated tokens
+    tokenizer.padding_side = 'left'
+
     # Load model
     model = AutoModelForCausalLM.from_pretrained(
         MODEL_PATH,
