@@ -57,6 +57,34 @@ request_id_counter = 0
 request_id_lock = threading.Lock()
 
 
+def apply_llama3_template(raw_content: str) -> str:
+    """
+    将客户端发来的原始文本包装成 Llama-3 的标准对话格式。
+    重点：System Prompt 必须强力禁止复读标题。
+    """
+    # 定义强力的系统指令
+    system_prompt = (
+        "You are a helpful assistant. "
+        "Read the provided contexts carefully. "
+        "Answer the question briefly and directly based ONLY on the contexts. "
+        "Do NOT repeat the phrase 'Wikipedia Title'. "
+        "Do NOT start your answer with 'Wikipedia Title'. "
+        "If you cannot answer based on the context, say 'I don't know'."
+    )
+
+    # 构建 Llama-3 格式
+    # <|start_header_id|>system<|end_header_id|>\n\n{system}\n<|eot_id|>
+    # <|start_header_id|>user<|end_header_id|>\n\n{user}\n<|eot_id|>
+    # <|start_header_id|>assistant<|end_header_id|>\n\n
+
+    formatted_prompt = (
+        f"<|start_header_id|>system<|end_header_id|>\n\n{system_prompt}<|eot_id|>"
+        f"<|start_header_id|>user<|end_header_id|>\n\n{raw_content}<|eot_id|>"
+        f"<|start_header_id|>assistant<|end_header_id|>\n\n"
+    )
+    return formatted_prompt
+
+
 @dataclass
 class BatchRequest:
     """Internal batch request representation."""
@@ -198,16 +226,16 @@ def process_batch(batch: List[BatchRequest], model, tokenizer):
             for req in batch:
                 process_single_request(req, model, tokenizer)
 
-
 def process_batch_group(group: List[BatchRequest], model, tokenizer):
     """Process a group of requests with same parameters as a true batch."""
     start_time = time.time()
 
-    # Extract prompts and parameters
-    prompts = [req.prompt for req in group]
+    # Extract prompts and apply Llama-3 template
+    prompts = [apply_llama3_template(req.prompt) for req in group]
     sample_req = group[0]
 
     # Batch tokenization
+    # padding=True 会自动填充到该 Batch 中最长的序列长度
     inputs = tokenizer(
         prompts,
         return_tensors="pt",
@@ -216,6 +244,10 @@ def process_batch_group(group: List[BatchRequest], model, tokenizer):
         padding=True,
         return_attention_mask=True
     ).to(model.device)
+
+    # 获取输入 Tensor 的物理宽度 (Input Length)
+    # 这是最关键的一步：无论有多少 Padding，生成的 Token 都在这个长度之后
+    input_seq_len = inputs.input_ids.shape[1]
 
     # Generation parameters
     gen_kwargs = {
@@ -239,26 +271,23 @@ def process_batch_group(group: List[BatchRequest], model, tokenizer):
     with torch.no_grad():
         outputs = model.generate(inputs.input_ids, **gen_kwargs)
 
-    # Decode - handle prompt removal at token level for accuracy
-    # Get prompt token lengths for each request in the batch
-    prompt_token_lengths = inputs.attention_mask.sum(dim=1).tolist()
-
     # Process each result
-    generated_texts_processed = []
-    for i, req in enumerate(group):
-        if not req.keep_prompt:
-            # Remove prompt tokens before decoding (more accurate than string slicing)
-            prompt_len = prompt_token_lengths[i]
-            output_without_prompt = outputs[i, prompt_len:]
-            text = tokenizer.decode(output_without_prompt, skip_special_tokens=True).strip()
-        else:
-            text = tokenizer.decode(outputs[i], skip_special_tokens=True).strip()
-
-        generated_texts_processed.append(text)
+    # 只需要解码新生成的 tokens
+    # outputs 的形状是 [batch_size, input_seq_len + new_tokens]
+    # 我们只取 [:, input_seq_len:]
+    new_tokens = outputs[:, input_seq_len:]
+    
+    # 批量解码提高效率
+    generated_texts = tokenizer.batch_decode(new_tokens, skip_special_tokens=True)
 
     # Process each result with token counts
     for i, req in enumerate(group):
-        text = generated_texts_processed[i]
+        text = generated_texts[i].strip()
+        
+        # 如果需要保留 Prompt (极为罕见，通常在 Chat 模式不需要)，则拼接回去
+        if req.keep_prompt:
+            text = req.prompt + text
+
         num_tokens = len(tokenizer.encode(text))
 
         result = {
@@ -274,19 +303,22 @@ def process_batch_group(group: List[BatchRequest], model, tokenizer):
         response_dict[req.request_id] = result
         response_events[req.request_id].set()
 
-
 def process_single_request(req: BatchRequest, model, tokenizer):
     """Process a single request (fallback or single-item batch)."""
     start_time = time.time()
 
-    # Tokenize
+    # Apply Llama-3 template and tokenize
+    final_prompt = apply_llama3_template(req.prompt)
+
     inputs = tokenizer(
-        req.prompt,
+        final_prompt,
         return_tensors="pt",
         truncation=True if req.max_input else False,
         max_length=req.max_input,
-        padding=False
+        padding=False # 单条不需要 Padding
     ).to(model.device)
+
+    input_seq_len = inputs.input_ids.shape[1]
 
     # Generation parameters
     gen_kwargs = {
@@ -310,14 +342,13 @@ def process_single_request(req: BatchRequest, model, tokenizer):
     with torch.no_grad():
         outputs = model.generate(**inputs, **gen_kwargs)
 
-    # Decode - handle prompt removal at token level for accuracy
-    prompt_token_length = inputs.input_ids.shape[1]
-
+    # Decode
     if not req.keep_prompt:
-        # Remove prompt tokens before decoding (more accurate than string slicing)
-        outputs_without_prompt = outputs[:, prompt_token_length:]
-        generated_texts = tokenizer.batch_decode(outputs_without_prompt, skip_special_tokens=True)
+        # 只取新生成的 Tokens 进行解码
+        new_tokens = outputs[:, input_seq_len:]
+        generated_texts = tokenizer.batch_decode(new_tokens, skip_special_tokens=True)
     else:
+        # 解码全部
         generated_texts = tokenizer.batch_decode(outputs, skip_special_tokens=True)
 
     # Clean up
@@ -417,9 +448,13 @@ async def generate_get(
 
     # Queue request
     request_queue.put(req)
+    
+    loop = asyncio.get_running_loop()
 
-    # Wait for response (with timeout)
-    event.wait(timeout=300)  # 5 min timeout
+    try:
+        await loop.run_in_executor(None, lambda: event.wait(timeout=300))
+    except:
+        pass
 
     # Get and return response
     if request_id in response_dict:
