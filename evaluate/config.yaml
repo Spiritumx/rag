@@ -53,6 +53,7 @@ outputs:
   stage1_dir: "evaluate/outputs/stage1_classifications"
   stage2_dir: "evaluate/outputs/stage2_predictions"
   stage3_dir: "evaluate/outputs/stage3_metrics"
+  analysis_dir: "evaluate/outputs/analysis"
 
 # Execution settings
 execution:

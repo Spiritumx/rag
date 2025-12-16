@@ -219,6 +219,8 @@ class Stage3Evaluator:
         """
         total_em = 0
         total_f1 = 0
+        total_acc = 0
+        total_recall = 0
         total_count = 0
 
         for dataset_name, metrics in all_metrics.items():
@@ -226,11 +228,15 @@ class Stage3Evaluator:
                 overall = metrics['overall']
                 total_em += overall['em'] * overall['count']
                 total_f1 += overall['f1'] * overall['count']
+                total_acc += overall.get('acc', 0) * overall['count']
+                total_recall += overall.get('recall', 0) * overall['count']
                 total_count += overall['count']
 
         return {
             'em': round(total_em / total_count, 4) if total_count > 0 else 0,
             'f1': round(total_f1 / total_count, 4) if total_count > 0 else 0,
+            'acc': round(total_acc / total_count, 4) if total_count > 0 else 0,
+            'recall': round(total_recall / total_count, 4) if total_count > 0 else 0,
             'count': total_count
         }
 
@@ -271,9 +277,11 @@ class Stage3Evaluator:
                 if 'overall' in metrics:
                     overall = metrics['overall']
                     f.write(f"Overall Performance:\n")
-                    f.write(f"  EM: {overall['em']:.4f}\n")
-                    f.write(f"  F1: {overall['f1']:.4f}\n")
-                    f.write(f"  Count: {overall['count']}\n\n")
+                    f.write(f"  EM:     {overall['em']:.4f}\n")
+                    f.write(f"  F1:     {overall['f1']:.4f}\n")
+                    f.write(f"  ACC:    {overall.get('acc', 0):.4f}\n")
+                    f.write(f"  Recall: {overall.get('recall', 0):.4f}\n")
+                    f.write(f"  Count:  {overall['count']}\n\n")
 
                 # Action distribution
                 if 'action_distribution' in metrics:
@@ -290,6 +298,8 @@ class Stage3Evaluator:
                             action_metrics = metrics['by_action'][action]
                             f.write(f"  {action:12s}: EM={action_metrics['em']:.4f}, "
                                   f"F1={action_metrics['f1']:.4f}, "
+                                  f"ACC={action_metrics.get('acc', 0):.4f}, "
+                                  f"Recall={action_metrics.get('recall', 0):.4f}, "
                                   f"Count={action_metrics['count']}\n")
                     f.write("\n")
 
@@ -299,8 +309,10 @@ class Stage3Evaluator:
             f.write("="*80 + "\n")
             if 'overall' in all_metrics:
                 overall = all_metrics['overall']
-                f.write(f"EM: {overall['em']:.4f}\n")
-                f.write(f"F1: {overall['f1']:.4f}\n")
+                f.write(f"EM:              {overall['em']:.4f}\n")
+                f.write(f"F1:              {overall['f1']:.4f}\n")
+                f.write(f"ACC:             {overall.get('acc', 0):.4f}\n")
+                f.write(f"Recall:          {overall.get('recall', 0):.4f}\n")
                 f.write(f"Total Questions: {overall['count']}\n")
 
     def print_report(self, all_metrics: dict):
@@ -318,7 +330,9 @@ class Stage3Evaluator:
             print(f"\n{dataset_name}:")
             if 'overall' in metrics:
                 overall = metrics['overall']
-                print(f"  Overall: EM={overall['em']:.4f}, F1={overall['f1']:.4f}, Count={overall['count']}")
+                print(f"  Overall: EM={overall['em']:.4f}, F1={overall['f1']:.4f}, "
+                     f"ACC={overall.get('acc', 0):.4f}, Recall={overall.get('recall', 0):.4f}, "
+                     f"Count={overall['count']}")
 
             if 'by_action' in metrics:
                 print(f"  By Action:")
@@ -327,6 +341,8 @@ class Stage3Evaluator:
                         action_metrics = metrics['by_action'][action]
                         print(f"    {action:12s}: EM={action_metrics['em']:.4f}, "
                              f"F1={action_metrics['f1']:.4f}, "
+                             f"ACC={action_metrics.get('acc', 0):.4f}, "
+                             f"Recall={action_metrics.get('recall', 0):.4f}, "
                              f"Count={action_metrics['count']}")
 
         print(f"\n{'='*80}")
@@ -334,8 +350,10 @@ class Stage3Evaluator:
         print(f"{'='*80}")
         if 'overall' in all_metrics:
             overall = all_metrics['overall']
-            print(f"EM: {overall['em']:.4f}")
-            print(f"F1: {overall['f1']:.4f}")
+            print(f"EM:              {overall['em']:.4f}")
+            print(f"F1:              {overall['f1']:.4f}")
+            print(f"ACC:             {overall.get('acc', 0):.4f}")
+            print(f"Recall:          {overall.get('recall', 0):.4f}")
             print(f"Total Questions: {overall['count']}")
 
 

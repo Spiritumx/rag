@@ -64,12 +64,16 @@ def apply_llama3_template(raw_content: str) -> str:
     """
     # 定义强力的系统指令
     system_prompt = (
-        "You are a helpful assistant. "
-        "Read the provided contexts carefully. "
-        "Answer the question briefly and directly based ONLY on the contexts. "
-        "Do NOT repeat the phrase 'Wikipedia Title'. "
-        "Do NOT start your answer with 'Wikipedia Title'. "
-        "If you cannot answer based on the context, say 'I don't know'."
+        "You are a helpful assistant specialized in answering questions based on provided context. "
+        "Follow these rules strictly:\n"
+        "1. Read all provided contexts carefully and extract relevant information.\n"
+        "2. Answer the question directly and concisely using ONLY information from the contexts.\n"
+        "3. If the contexts contain the answer, provide it even if you're not 100% certain.\n"
+        "4. NEVER repeat or echo phrases like 'Wikipedia Title', 'Context:', or similar meta-text.\n"
+        "5. NEVER start your answer with 'Wikipedia Title' or any context markers.\n"
+        "6. Only say 'I don't know' if the contexts truly contain NO relevant information.\n"
+        "7. Prefer extracting specific facts, names, dates, or phrases directly from the context.\n"
+        "8. Be confident in your answer when evidence exists in the context."
     )
 
     # 构建 Llama-3 格式
@@ -372,14 +376,14 @@ class GenerateRequest(BaseModel):
     """Single generation request."""
     prompt: str
     max_input: Optional[int] = None
-    max_length: int = 200
+    max_length: int = 256  # Increased from 200 to allow longer reasoning
     min_length: int = 1
-    do_sample: bool = False
-    temperature: float = 1.0
+    do_sample: bool = False  # Keep greedy decoding for consistency
+    temperature: float = 0.2  # Lowered from 1.0 for more deterministic outputs
     top_k: int = 50
-    top_p: float = 1.0
+    top_p: float = 0.95  # Slightly reduced from 1.0 for better quality
     num_return_sequences: int = 1
-    repetition_penalty: Optional[float] = None
+    repetition_penalty: Optional[float] = 1.2  # Added to prevent repetition
     length_penalty: Optional[float] = None
     keep_prompt: bool = False
 
@@ -413,14 +417,14 @@ async def index():
 async def generate_get(
     prompt: str,
     max_input: Optional[int] = None,
-    max_length: int = 200,
+    max_length: int = 256,  # Increased for longer reasoning
     min_length: int = 1,
     do_sample: bool = False,
-    temperature: float = 1.0,
+    temperature: float = 0.2,  # Lower for more deterministic outputs
     top_k: int = 50,
-    top_p: float = 1.0,
+    top_p: float = 0.95,  # Slightly reduced for better quality
     num_return_sequences: int = 1,
-    repetition_penalty: Optional[float] = None,
+    repetition_penalty: Optional[float] = 1.2,  # Added to prevent repetition
     length_penalty: Optional[float] = None,
     keep_prompt: bool = False,
 ):

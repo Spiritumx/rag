@@ -64,10 +64,56 @@ def metric_max_over_ground_truths(metric_fn, prediction, ground_truths):
     return max(scores_for_ground_truths)
 
 
+def compute_accuracy(a_gold, a_pred):
+    """
+    ACC (准确率): 判断预测答案是否包含真实答案。
+    如果预测中包含真实答案的任何形式，则认为正确。
+    """
+    # 标准化后检查包含关系
+    normalized_gold = normalize_answer(a_gold)
+    normalized_pred = normalize_answer(a_pred)
+
+    # 检查预测是否包含真实答案
+    if normalized_gold in normalized_pred:
+        return 1
+
+    # 检查真实答案是否包含在预测中（考虑 token 级别）
+    gold_tokens = set(get_tokens(a_gold))
+    pred_tokens = set(get_tokens(a_pred))
+
+    # 如果真实答案的所有 token 都在预测中，也认为正确
+    if gold_tokens and gold_tokens.issubset(pred_tokens):
+        return 1
+
+    return 0
+
+
+def compute_recall(a_gold, a_pred):
+    """
+    Recall (召回率): 判断真实答案的关键信息是否被预测答案覆盖。
+    计算真实答案中有多少比例的 token 出现在预测答案中。
+    """
+    gold_toks = get_tokens(a_gold)
+    pred_toks = get_tokens(a_pred)
+
+    if len(gold_toks) == 0:
+        # 如果真实答案为空，recall 为 1
+        return 1
+
+    # 计算真实答案中有多少 token 在预测中
+    common = collections.Counter(gold_toks) & collections.Counter(pred_toks)
+    num_covered = sum(common.values())
+
+    recall = num_covered / len(gold_toks)
+    return recall
+
+
 class SquadAnswerEmF1Metric(Metric):
     def __init__(self) -> None:
         self._total_em = 0.0
         self._total_f1 = 0.0
+        self._total_acc = 0.0
+        self._total_recall = 0.0
         self._count = 0
 
     def __call__(
@@ -81,25 +127,39 @@ class SquadAnswerEmF1Metric(Metric):
         #import pdb; pdb.set_trace()
         predicted_answer = ftfy.fix_text(predicted_answer)
         ground_truth_answers = [ftfy.fix_text(e) for e in ground_truth_answers]
-        
+
         assert isinstance(predicted_answer, str)
         assert isinstance(ground_truth_answers, (Tuple, List))
 
         exact_scores = metric_max_over_ground_truths(compute_exact, predicted_answer, ground_truth_answers)
         f1_scores = metric_max_over_ground_truths(compute_f1, predicted_answer, ground_truth_answers)
+        acc_scores = metric_max_over_ground_truths(compute_accuracy, predicted_answer, ground_truth_answers)
+        recall_scores = metric_max_over_ground_truths(compute_recall, predicted_answer, ground_truth_answers)
 
         self._total_em += int(exact_scores)
         self._total_f1 += f1_scores
+        self._total_acc += int(acc_scores)
+        self._total_recall += recall_scores
         self._count += 1
 
     def get_metric(self, reset: bool = False) -> Tuple[float, float]:
         exact_match = self._total_em / self._count if self._count > 0 else 0
         f1_score = self._total_f1 / self._count if self._count > 0 else 0
+        accuracy = self._total_acc / self._count if self._count > 0 else 0
+        recall = self._total_recall / self._count if self._count > 0 else 0
         if reset:
             self.reset()
-        return {"em": round(exact_match, 3), "f1": round(f1_score, 3), "count": self._count}
+        return {
+            "em": round(exact_match, 3),
+            "f1": round(f1_score, 3),
+            "acc": round(accuracy, 3),
+            "recall": round(recall, 3),
+            "count": self._count
+        }
 
     def reset(self):
         self._total_em = 0.0
         self._total_f1 = 0.0
+        self._total_acc = 0.0
+        self._total_recall = 0.0
         self._count = 0
