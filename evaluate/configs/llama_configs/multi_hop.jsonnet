@@ -1,9 +1,10 @@
 # Multi-hop reasoning config for Llama 3-8B (IRCoT)
 # Action: M - Iterative hybrid retrieval with chain-of-thought reasoning
-# Process: Each iteration uses BM25+SPLADE+HNSW → Reranker → Top-10
+# Process: Each iteration retrieves 50 docs → Reranker → Top-5
 
 local retrieval_corpus_name = 'wiki';  # Use wiki for all datasets
-local hybrid_retrieval_count = 10;  # Final top-K after reranking per iteration
+local retrieval_count = 5;  # Final top-K after reranking per iteration
+local max_buffer_count = 50;  # Number of docs to retrieve before reranking
 
 {
     "start_state": "step_by_step_hybrid_retriever",
@@ -15,7 +16,8 @@ local hybrid_retrieval_count = 10;  # Final top-K after reranking per iteration
             "retrieval_type": "hybrid",
             "retriever_host": std.extVar("RETRIEVER_HOST"),
             "retriever_port": std.extVar("RETRIEVER_PORT"),
-            "retrieval_count": hybrid_retrieval_count,
+            "retrieval_count": retrieval_count,
+            "max_buffer_count": max_buffer_count,
             "global_max_num_paras": 15,
             "query_source": "question_or_last_generated_sentence",
             "source_corpus_name": retrieval_corpus_name,

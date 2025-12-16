@@ -1,9 +1,10 @@
 # Single-hop hybrid retrieval config for Llama 3-8B
 # Action: S-Hybrid - Hybrid retrieval (BM25 + SPLADE + HNSW) with Reranker
-# Process: Each method retrieves 10 docs → 30 total → Dedup → Reranker → Top-10
+# Process: Each method retrieves 50 docs → merge → Reranker → Top-5
 
 local retrieval_corpus_name = 'wiki';
-local hybrid_retrieval_count = 10;  # Final top-K after reranking
+local retrieval_count = 5;  # Final top-K after reranking
+local max_buffer_count = 50;  # Number of docs to retrieve before reranking
 
 {
     "start_state": "generate_titles",
@@ -15,7 +16,8 @@ local hybrid_retrieval_count = 10;  # Final top-K after reranking
             "retrieval_type": "hybrid",
             "retriever_host": std.extVar("RETRIEVER_HOST"),
             "retriever_port": std.extVar("RETRIEVER_PORT"),
-            "retrieval_count": hybrid_retrieval_count,
+            "retrieval_count": retrieval_count,
+            "max_buffer_count": max_buffer_count,
             "global_max_num_paras": 15,
             "query_source": "original_question",
             "source_corpus_name": retrieval_corpus_name,

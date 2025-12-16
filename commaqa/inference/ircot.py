@@ -328,6 +328,7 @@ class RetrieveAndResetParagraphsParticipant(ParticipantModel):
         retriever_host=None,
         retriever_port=None,
         retrieval_count=None,
+        max_buffer_count=100,
         query_source="last_answer",
         cumulate_titles=False,
         document_type="title",
@@ -377,6 +378,7 @@ class RetrieveAndResetParagraphsParticipant(ParticipantModel):
         self.retriever_host = retriever_host
         self.retriever_port = retriever_port
         self.retrieval_count = retrieval_count
+        self.max_buffer_count = max_buffer_count
         self.document_type = document_type
         self.query_source = query_source
         self.cumulate_titles = cumulate_titles
@@ -508,6 +510,7 @@ class RetrieveAndResetParagraphsParticipant(ParticipantModel):
                 "retrieval_method": retrieval_method,
                 "query_text": backend_query,
                 "max_hits_count": self.retrieval_count,
+                "max_buffer_count": self.max_buffer_count,
                 "corpus_name": self.source_corpus_name,
                 "document_type": self.document_type,
                 "retrieval_backend": self.retrieval_type,
