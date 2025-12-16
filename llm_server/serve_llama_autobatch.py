@@ -59,48 +59,20 @@ request_id_lock = threading.Lock()
 
 def apply_llama3_template(raw_content: str) -> str:
     """
-    SQuAD 专用核弹级 Prompt：
-    1. 移除所有"礼貌用语"。
-    2. 增加 One-Shot 示例（给它看标准答案长什么样）。
-    3. 强制要求答案必须是 Context 的子字符串。
+    将原始 prompt 包装成 Llama-3 的 Chat Template 格式。
+    使用简单的 system prompt，让模型基于上下文回答问题。
     """
-
-    # 定义 System Prompt
+    # 简单的系统提示
     system_prompt = (
-        "You are a text extraction model. "
-        "Task: Extract the exact answer from the Context based on the Question. "
-        "Rules:\n"
-        "1. Answer MUST be a short substring extracted directly from the Context.\n"
-        "2. Answer MUST be 1 to 5 words long (Names, Dates, Entities, Short Phrases).\n"
-        "3. NO full sentences. NO punctuation at the end.\n"
-        "4. NO preamble like 'The answer is'.\n"
-        "5. If you are unsure, output the most likely entity from the text. DO NOT say 'I don't know'."
+        "You are a helpful assistant. Answer the question based on the given context. "
+        "Provide a concise and accurate answer."
     )
 
-    # 定义 One-Shot 示例 (这是最关键的一步，教模型怎么做)
-    # 我们伪造一个简短的 Context/Q/A 对
-    example_context = (
-        "Context: The Eiffel Tower is a wrought-iron lattice tower on the Champ de Mars in Paris, France. "
-        "It is named after the engineer Gustave Eiffel."
-    )
-    example_turn = (
-        f"<|start_header_id|>user<|end_header_id|>\n\n"
-        f"{example_context}\n\nQuestion: Who is the tower named after?<|eot_id|>"
-        f"<|start_header_id|>assistant<|end_header_id|>\n\n"
-        f"Gustave Eiffel<|eot_id|>"
-    )
-
-    # 构建当前请求
-    current_turn = (
-        f"<|start_header_id|>user<|end_header_id|>\n\n{raw_content}<|eot_id|>"
-        f"<|start_header_id|>assistant<|end_header_id|>\n\n"
-    )
-
-    # 组合所有部分
+    # 构建 Llama-3 格式的 prompt
     formatted_prompt = (
         f"<|start_header_id|>system<|end_header_id|>\n\n{system_prompt}<|eot_id|>"
-        f"{example_turn}"  # 插入示例
-        f"{current_turn}"
+        f"<|start_header_id|>user<|end_header_id|>\n\n{raw_content}<|eot_id|>"
+        f"<|start_header_id|>assistant<|end_header_id|>\n\n"
     )
 
     return formatted_prompt

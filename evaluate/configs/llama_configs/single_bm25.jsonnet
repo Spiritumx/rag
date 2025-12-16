@@ -1,8 +1,9 @@
-# Single-hop SPLADE retrieval config for Llama 3-8B
-# Action: S-Sparse - Single retrieval round with SPLADE
+# Single-hop hybrid (BM25 + SPLADE) retrieval config for Llama 3-8B
+# Action: S-Sparse - Hybrid retrieval with BM25 and SPLADE only
+# Process: BM25 retrieves 10 docs + SPLADE retrieves 10 docs → 20 total → Dedup → Reranker → Top-10
 
 local retrieval_corpus_name = 'wiki';
-local splade_retrieval_count = 10;
+local sparse_retrieval_count = 10;  # Final top-K after reranking
 
 {
     "start_state": "generate_titles",
@@ -11,10 +12,11 @@ local splade_retrieval_count = 10;
         "generate_titles": {
             "name": "retrieve_and_reset_paragraphs",
             "next_model": "generate_main_question",
-            "retrieval_type": "splade",
+            "retrieval_type": "hybrid",
             "retriever_host": std.extVar("RETRIEVER_HOST"),
             "retriever_port": std.extVar("RETRIEVER_PORT"),
-            "retrieval_count": splade_retrieval_count,
+            "retrieval_count": sparse_retrieval_count,
+            "hybrid_weights": {"bm25": 1.0, "splade": 1.0, "hnsw": 0.0},
             "global_max_num_paras": 15,
             "query_source": "original_question",
             "source_corpus_name": retrieval_corpus_name,
