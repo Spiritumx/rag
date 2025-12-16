@@ -1,20 +1,21 @@
 # Multi-hop reasoning config for Llama 3-8B (IRCoT)
-# Action: M - Iterative retrieval and chain-of-thought reasoning
+# Action: M - Iterative hybrid retrieval with chain-of-thought reasoning
+# Process: Each iteration uses BM25+SPLADE+HNSW → Reranker → Top-10
 
 local retrieval_corpus_name = 'wiki';  # Use wiki for all datasets
-local bm25_retrieval_count = 6;
+local hybrid_retrieval_count = 10;  # Final top-K after reranking per iteration
 
 {
-    "start_state": "step_by_step_bm25_retriever",
+    "start_state": "step_by_step_hybrid_retriever",
     "end_state": "[EOQ]",
     "models": {
-        "step_by_step_bm25_retriever": {
+        "step_by_step_hybrid_retriever": {
             "name": "retrieve_and_reset_paragraphs",
             "next_model": "step_by_step_cot_reasoning_gen",
-            "retrieval_type": "bm25",
+            "retrieval_type": "hybrid",
             "retriever_host": std.extVar("RETRIEVER_HOST"),
             "retriever_port": std.extVar("RETRIEVER_PORT"),
-            "retrieval_count": bm25_retrieval_count,
+            "retrieval_count": hybrid_retrieval_count,
             "global_max_num_paras": 15,
             "query_source": "question_or_last_generated_sentence",
             "source_corpus_name": retrieval_corpus_name,
@@ -47,7 +48,7 @@ local bm25_retrieval_count = 6;
         },
         "step_by_step_exit_controller": {
             "name": "step_by_step_exit_controller",
-            "next_model": "step_by_step_bm25_retriever",
+            "next_model": "step_by_step_hybrid_retriever",
             // Improved regex: handles "answer is:", "A:", or direct answer formats
             // Captures answer until period or newline, more robust than before
             "answer_extractor_regex": "(?:.*?(?:answer is:?|A:)\\s*|^)([^.\\n]+?)(?:\\.|\\n|$)",

@@ -1,5 +1,5 @@
 """
-批量更新 prompt 模板文件，扩展到支持 5 个上下文。
+批量更新 prompt 模板文件，扩展到支持 10 个上下文。
 """
 import os
 from pathlib import Path
@@ -22,6 +22,21 @@ Wikipedia Title: [Title 4]
 
 Wikipedia Title: [Title 5]
 [Content 5]
+
+Wikipedia Title: [Title 6]
+[Content 6]
+
+Wikipedia Title: [Title 7]
+[Content 7]
+
+Wikipedia Title: [Title 8]
+[Content 8]
+
+Wikipedia Title: [Title 9]
+[Content 9]
+
+Wikipedia Title: [Title 10]
+[Content 10]
 ---------------------
 
 Based strictly on the context above, answer the following question.
@@ -47,6 +62,21 @@ Wikipedia Title: [Title 4]
 
 Wikipedia Title: [Title 5]
 [Content 5]
+
+Wikipedia Title: [Title 6]
+[Content 6]
+
+Wikipedia Title: [Title 7]
+[Content 7]
+
+Wikipedia Title: [Title 8]
+[Content 8]
+
+Wikipedia Title: [Title 9]
+[Content 9]
+
+Wikipedia Title: [Title 10]
+[Content 10]
 ---------------------
 
 Task: Answer the question based on the context. You must think step-by-step.

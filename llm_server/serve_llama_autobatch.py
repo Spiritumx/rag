@@ -59,35 +59,50 @@ request_id_lock = threading.Lock()
 
 def apply_llama3_template(raw_content: str) -> str:
     """
-    将客户端发来的原始文本包装成 Llama-3 的标准对话格式。
-    重点：System Prompt 必须强力禁止复读标题。
+    SQuAD 专用核弹级 Prompt：
+    1. 移除所有"礼貌用语"。
+    2. 增加 One-Shot 示例（给它看标准答案长什么样）。
+    3. 强制要求答案必须是 Context 的子字符串。
     """
-    # 定义强力的系统指令 - 强调简短回答
+
+    # 定义 System Prompt
     system_prompt = (
-        "You are a helpful assistant specialized in answering questions based on provided context. "
-        "Follow these rules strictly:\n"
-        "1. Read all provided contexts carefully and extract relevant information.\n"
-        "2. Answer MUST be EXTREMELY CONCISE - use the fewest words possible.\n"
-        "3. Answer with ONLY a single entity, name, date, number, or short phrase (1-5 words).\n"
-        "4. Do NOT write complete sentences. Do NOT add explanations.\n"
-        "5. Extract the answer span directly from the context without modification.\n"
-        "6. NEVER repeat or echo phrases like 'Wikipedia Title', 'Context:', or similar meta-text.\n"
-        "7. NEVER start your answer with 'Wikipedia Title' or any context markers.\n"
-        "8. Only say 'I don't know' if the contexts truly contain NO relevant information.\n"
-        "9. Examples of GOOD answers: 'John Smith', '1995', 'Paris', 'three'.\n"
-        "10. Examples of BAD answers: 'The answer is John Smith', 'It was in Paris', 'The city of Paris'."
+        "You are a text extraction model. "
+        "Task: Extract the exact answer from the Context based on the Question. "
+        "Rules:\n"
+        "1. Answer MUST be a short substring extracted directly from the Context.\n"
+        "2. Answer MUST be 1 to 5 words long (Names, Dates, Entities, Short Phrases).\n"
+        "3. NO full sentences. NO punctuation at the end.\n"
+        "4. NO preamble like 'The answer is'.\n"
+        "5. If you are unsure, output the most likely entity from the text. DO NOT say 'I don't know'."
     )
 
-    # 构建 Llama-3 格式
-    # <|start_header_id|>system<|end_header_id|>\n\n{system}\n<|eot_id|>
-    # <|start_header_id|>user<|end_header_id|>\n\n{user}\n<|eot_id|>
-    # <|start_header_id|>assistant<|end_header_id|>\n\n
+    # 定义 One-Shot 示例 (这是最关键的一步，教模型怎么做)
+    # 我们伪造一个简短的 Context/Q/A 对
+    example_context = (
+        "Context: The Eiffel Tower is a wrought-iron lattice tower on the Champ de Mars in Paris, France. "
+        "It is named after the engineer Gustave Eiffel."
+    )
+    example_turn = (
+        f"<|start_header_id|>user<|end_header_id|>\n\n"
+        f"{example_context}\n\nQuestion: Who is the tower named after?<|eot_id|>"
+        f"<|start_header_id|>assistant<|end_header_id|>\n\n"
+        f"Gustave Eiffel<|eot_id|>"
+    )
 
-    formatted_prompt = (
-        f"<|start_header_id|>system<|end_header_id|>\n\n{system_prompt}<|eot_id|>"
+    # 构建当前请求
+    current_turn = (
         f"<|start_header_id|>user<|end_header_id|>\n\n{raw_content}<|eot_id|>"
         f"<|start_header_id|>assistant<|end_header_id|>\n\n"
     )
+
+    # 组合所有部分
+    formatted_prompt = (
+        f"<|start_header_id|>system<|end_header_id|>\n\n{system_prompt}<|eot_id|>"
+        f"{example_turn}"  # 插入示例
+        f"{current_turn}"
+    )
+
     return formatted_prompt
 
 

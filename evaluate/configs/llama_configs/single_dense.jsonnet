@@ -2,7 +2,7 @@
 # Action: S-Dense - Single retrieval round with dense vectors
 
 local retrieval_corpus_name = 'wiki';
-local hnsw_retrieval_count = 5;
+local hnsw_retrieval_count = 10;
 
 {
     "start_state": "generate_titles",

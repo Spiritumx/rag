@@ -1,8 +1,8 @@
-# Single-hop BM25 retrieval config for Llama 3-8B
-# Action: S-Sparse - Single retrieval round with BM25
+# Single-hop SPLADE retrieval config for Llama 3-8B
+# Action: S-Sparse - Single retrieval round with SPLADE
 
 local retrieval_corpus_name = 'wiki';
-local bm25_retrieval_count = 5;
+local splade_retrieval_count = 10;
 
 {
     "start_state": "generate_titles",
@@ -11,10 +11,10 @@ local bm25_retrieval_count = 5;
         "generate_titles": {
             "name": "retrieve_and_reset_paragraphs",
             "next_model": "generate_main_question",
-            "retrieval_type": "bm25",
+            "retrieval_type": "splade",
             "retriever_host": std.extVar("RETRIEVER_HOST"),
             "retriever_port": std.extVar("RETRIEVER_PORT"),
-            "retrieval_count": bm25_retrieval_count,
+            "retrieval_count": splade_retrieval_count,
             "global_max_num_paras": 15,
             "query_source": "original_question",
             "source_corpus_name": retrieval_corpus_name,

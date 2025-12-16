@@ -1,8 +1,9 @@
 # Single-hop hybrid retrieval config for Llama 3-8B
-# Action: S-Hybrid - Single retrieval round with hybrid (BM25 + dense)
+# Action: S-Hybrid - Hybrid retrieval (BM25 + SPLADE + HNSW) with Reranker
+# Process: Each method retrieves 10 docs → 30 total → Dedup → Reranker → Top-10
 
 local retrieval_corpus_name = 'wiki';
-local hybrid_retrieval_count = 5;
+local hybrid_retrieval_count = 10;  # Final top-K after reranking
 
 {
     "start_state": "generate_titles",
