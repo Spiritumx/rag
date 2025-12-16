@@ -48,7 +48,9 @@ local bm25_retrieval_count = 6;
         "step_by_step_exit_controller": {
             "name": "step_by_step_exit_controller",
             "next_model": "step_by_step_bm25_retriever",
-            "answer_extractor_regex": ".* answer is:? (.*)\\.?",
+            // Improved regex: handles "answer is:", "A:", or direct answer formats
+            // Captures answer until period or newline, more robust than before
+            "answer_extractor_regex": "(?:.*?(?:answer is:?|A:)\\s*|^)([^.\\n]+?)(?:\\.|\\n|$)",
             "answer_extractor_remove_last_fullstop": true,
             "terminal_state_next_model": "generate_main_question",
             "terminal_return_type": "pids",
@@ -81,7 +83,9 @@ local bm25_retrieval_count = 6;
         "extract_answer": {
             "name": "answer_extractor",
             "query_source": "last_answer",
-            "regex": ".* answer is:? (.*)\\.?",
+            // Improved regex: handles "answer is:", "A:", or direct answer formats
+            // Captures answer until period or newline, more robust than before
+            "regex": "(?:.*?(?:answer is:?|A:)\\s*|^)([^.\\n]+?)(?:\\.|\\n|$)",
             "match_all_on_failure": true,
             "remove_last_fullstop": true,
         }

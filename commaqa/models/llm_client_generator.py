@@ -237,9 +237,28 @@ class LLMClientGenerator:
         generated_texts = result["generated_texts"]
         modified_texts = []
         for text in generated_texts:
-            # remove the prompt
+            # remove the prompt - with better handling for tokenization boundary issues
             if text.startswith(prompt):
-                text = text[len(prompt) :]
+                # Exact match - remove prompt and strip leading whitespace
+                text = text[len(prompt):].lstrip()
+            else:
+                # Partial match handling for tokenization boundary issues
+                # Find longest common prefix
+                common_len = 0
+                min_len = min(len(prompt), len(text))
+                for i in range(min_len):
+                    if prompt[i] == text[i]:
+                        common_len = i + 1
+                    else:
+                        break
+
+                # Only remove if we have significant overlap (>50% of prompt)
+                # This prevents accidentally removing answer content
+                if common_len > len(prompt) * 0.5:
+                    text = text[common_len:].lstrip()
+                    # Uncomment for debugging:
+                    # print(f"Warning: Partial prompt match. Removed {common_len}/{len(prompt)} chars")
+
             if self.eos_text and self.eos_text in text:
                 text = text[: text.index(self.eos_text)]
             modified_texts.append(text)
