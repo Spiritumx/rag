@@ -55,16 +55,38 @@ class RetrievalQualityAnalyzer:
 
         return gold_titles
 
-    def extract_retrieved_titles(self, retrieved_contexts: List[dict]) -> Set[str]:
+    def extract_retrieved_titles(self, retrieved_contexts) -> Set[str]:
         """提取检索到的上下文标题"""
         retrieved_titles = set()
 
-        for ctx in retrieved_contexts:
-            if isinstance(ctx, dict):
-                # 尝试不同的标题字段
-                title = ctx.get('title') or ctx.get('wikipedia_title') or ctx.get('doc_title', '')
+        # contexts 的实际格式: {"titles": [...], "paras": [...]}
+        if isinstance(retrieved_contexts, dict):
+            # 如果是字典，检查是否有 'titles' 字段
+            if 'titles' in retrieved_contexts:
+                titles = retrieved_contexts['titles']
+                if isinstance(titles, list):
+                    for title in titles:
+                        if title:
+                            retrieved_titles.add(self.normalize_title(title))
+            # 也可能包含单个 title 字段
+            elif 'title' in retrieved_contexts:
+                title = retrieved_contexts['title']
                 if title:
                     retrieved_titles.add(self.normalize_title(title))
+
+        # 如果是列表格式（兼容其他可能的格式）
+        elif isinstance(retrieved_contexts, list):
+            for ctx in retrieved_contexts:
+                if isinstance(ctx, dict):
+                    # 尝试不同的标题字段
+                    title = (ctx.get('title') or
+                            ctx.get('wikipedia_title') or
+                            ctx.get('doc_title', ''))
+                    if title:
+                        retrieved_titles.add(self.normalize_title(title))
+                elif isinstance(ctx, str):
+                    # 如果直接是标题字符串
+                    retrieved_titles.add(self.normalize_title(ctx))
 
         return retrieved_titles
 
