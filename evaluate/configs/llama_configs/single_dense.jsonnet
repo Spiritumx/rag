@@ -1,10 +1,10 @@
 # Single-hop dense (HNSW) retrieval config for Llama 3-8B
 # Action: S-Dense - Single retrieval round with dense vectors
-# Process: HNSW retrieves 50 docs → Reranker → Top-5
+# Process: HNSW retrieves 20 docs → Reranker → Top-10
 
 local retrieval_corpus_name = 'wiki';
-local retrieval_count = 5;  # Final top-K after reranking
-local max_buffer_count = 50;  # Number of docs to retrieve before reranking
+local retrieval_count = 10;  # Final top-K after reranking
+local max_buffer_count = 20;  # Number of docs to retrieve before reranking
 
 {
     "start_state": "generate_titles",

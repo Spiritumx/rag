@@ -66,18 +66,24 @@ def metric_max_over_ground_truths(metric_fn, prediction, ground_truths):
 
 def compute_accuracy(a_gold, a_pred):
     """
-    ACC (准确率): 判断预测答案是否包含真实答案。
-    如果预测中包含真实答案的任何形式，则认为正确。
+    ACC (准确率): 双向判断预测答案和真实答案的包含关系。
+    1. 原有逻辑：Gold 在 Pred 里 (解决废话多)
+    2. 新增逻辑：Pred 在 Gold 里 (解决 Gold 太长/太细)
     """
     # 标准化后检查包含关系
     normalized_gold = normalize_answer(a_gold)
     normalized_pred = normalize_answer(a_pred)
 
-    # 检查预测是否包含真实答案
+    # 1. 原有逻辑：检查 Gold 是否在 Pred 中（解决模型废话多的问题）
     if normalized_gold in normalized_pred:
         return 1
 
-    # 检查真实答案是否包含在预测中（考虑 token 级别）
+    # 2. 新增逻辑：检查 Pred 是否在 Gold 中（解决 Gold 答案太长的问题）
+    # 加长度限制，防止预测 "a" 或 "the" 被算对
+    if len(normalized_pred) > 3 and normalized_pred in normalized_gold:
+        return 1
+
+    # 3. Token 级别的检查（保留原有逻辑）
     gold_tokens = set(get_tokens(a_gold))
     pred_tokens = set(get_tokens(a_pred))
 
@@ -90,15 +96,30 @@ def compute_accuracy(a_gold, a_pred):
 
 def compute_recall(a_gold, a_pred):
     """
-    Recall (召回率): 判断真实答案的关键信息是否被预测答案覆盖。
-    计算真实答案中有多少比例的 token 出现在预测答案中。
+    Recall (召回率): 双向判断答案的覆盖情况。
+    1. 计算 Gold 的 token 在 Pred 中的覆盖率（原有逻辑）
+    2. 如果 Pred 完全包含在 Gold 中，也给高分（新增逻辑）
     """
+    # 标准化后的文本
+    normalized_gold = normalize_answer(a_gold)
+    normalized_pred = normalize_answer(a_pred)
+
+    # 双向字符串包含检查（优先级最高）
+    # 1. Gold 在 Pred 里 -> 完美召回
+    if normalized_gold in normalized_pred:
+        return 1.0
+
+    # 2. Pred 在 Gold 里 -> 也算高召回（加长度限制）
+    if len(normalized_pred) > 3 and normalized_pred in normalized_gold:
+        return 1.0
+
+    # 3. Token 级别的召回率计算（原有逻辑）
     gold_toks = get_tokens(a_gold)
     pred_toks = get_tokens(a_pred)
 
     if len(gold_toks) == 0:
         # 如果真实答案为空，recall 为 1
-        return 1
+        return 1.0
 
     # 计算真实答案中有多少 token 在预测中
     common = collections.Counter(gold_toks) & collections.Counter(pred_toks)

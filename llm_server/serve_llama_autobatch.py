@@ -56,27 +56,37 @@ response_events: Dict[str, threading.Event] = {}
 request_id_counter = 0
 request_id_lock = threading.Lock()
 
-
 def apply_llama3_template(raw_content: str) -> str:
     """
     将原始 prompt 包装成 Llama-3 的 Chat Template 格式。
-    使用简单的 system prompt，让模型基于上下文回答问题。
+    使用强约束的 System Prompt，专门针对 RAG 任务优化。
     """
-    # 简单的系统提示
+    
+    # 升级版系统提示：强调精确性、去噪、简短
+    # 这里的 prompt 对应我们刚才讨论的优化方向
     system_prompt = (
-        "You are a helpful assistant. Answer the question based on the given context. "
-        "Provide a concise and accurate answer."
+        "You are a precise QA assistant. "
+        "Read the provided context and answer the user's question.\n\n"
+        "Rules:\n"
+        "1. Answer based ONLY on the context. Do not use your internal knowledge.\n"
+        "2. Be extremely concise. Output ONLY the answer entity or short phrase.\n"
+        "3. Do NOT write full sentences. Do NOT say 'The answer is...'.\n"
+        "4. If the answer is not in the context, output exactly 'I don't know'."
     )
+
+    # Llama-3 特殊 Token 定义 (为了代码可读性提取出来)
+    header_start = "<|start_header_id|>"
+    header_end = "<|end_header_id|>"
+    eot = "<|eot_id|>"
 
     # 构建 Llama-3 格式的 prompt
     formatted_prompt = (
-        f"<|start_header_id|>system<|end_header_id|>\n\n{system_prompt}<|eot_id|>"
-        f"<|start_header_id|>user<|end_header_id|>\n\n{raw_content}<|eot_id|>"
-        f"<|start_header_id|>assistant<|end_header_id|>\n\n"
+        f"{header_start}system{header_end}\n\n{system_prompt}{eot}"
+        f"{header_start}user{header_end}\n\n{raw_content}{eot}"
+        f"{header_start}assistant{header_end}\n\n"
     )
 
     return formatted_prompt
-
 
 @dataclass
 class BatchRequest:
