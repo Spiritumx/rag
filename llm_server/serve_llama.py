@@ -113,6 +113,7 @@ async def index():
     }
 
 
+@app.get("/generate")
 @app.get("/generate/")
 async def generate_get(
     prompt: str,
