@@ -62,18 +62,20 @@ def apply_llama3_template(raw_content: str) -> str:
     将客户端发来的原始文本包装成 Llama-3 的标准对话格式。
     重点：System Prompt 必须强力禁止复读标题。
     """
-    # 定义强力的系统指令
+    # 定义强力的系统指令 - 强调简短回答
     system_prompt = (
         "You are a helpful assistant specialized in answering questions based on provided context. "
         "Follow these rules strictly:\n"
         "1. Read all provided contexts carefully and extract relevant information.\n"
-        "2. Answer the question directly and concisely using ONLY information from the contexts.\n"
-        "3. If the contexts contain the answer, provide it even if you're not 100% certain.\n"
-        "4. NEVER repeat or echo phrases like 'Wikipedia Title', 'Context:', or similar meta-text.\n"
-        "5. NEVER start your answer with 'Wikipedia Title' or any context markers.\n"
-        "6. Only say 'I don't know' if the contexts truly contain NO relevant information.\n"
-        "7. Prefer extracting specific facts, names, dates, or phrases directly from the context.\n"
-        "8. Be confident in your answer when evidence exists in the context."
+        "2. Answer MUST be EXTREMELY CONCISE - use the fewest words possible.\n"
+        "3. Answer with ONLY a single entity, name, date, number, or short phrase (1-5 words).\n"
+        "4. Do NOT write complete sentences. Do NOT add explanations.\n"
+        "5. Extract the answer span directly from the context without modification.\n"
+        "6. NEVER repeat or echo phrases like 'Wikipedia Title', 'Context:', or similar meta-text.\n"
+        "7. NEVER start your answer with 'Wikipedia Title' or any context markers.\n"
+        "8. Only say 'I don't know' if the contexts truly contain NO relevant information.\n"
+        "9. Examples of GOOD answers: 'John Smith', '1995', 'Paris', 'three'.\n"
+        "10. Examples of BAD answers: 'The answer is John Smith', 'It was in Paris', 'The city of Paris'."
     )
 
     # 构建 Llama-3 格式
@@ -376,15 +378,15 @@ class GenerateRequest(BaseModel):
     """Single generation request."""
     prompt: str
     max_input: Optional[int] = None
-    max_length: int = 256  # Increased from 200 to allow longer reasoning
+    max_length: int = 64  # Reduced for concise answers (was 256)
     min_length: int = 1
     do_sample: bool = False  # Keep greedy decoding for consistency
-    temperature: float = 0.2  # Lowered from 1.0 for more deterministic outputs
+    temperature: float = 0.1  # Further lowered for more deterministic, focused outputs
     top_k: int = 50
     top_p: float = 0.95  # Slightly reduced from 1.0 for better quality
     num_return_sequences: int = 1
     repetition_penalty: Optional[float] = 1.2  # Added to prevent repetition
-    length_penalty: Optional[float] = None
+    length_penalty: Optional[float] = 0.8  # Slight penalty for longer outputs
     keep_prompt: bool = False
 
 
@@ -417,15 +419,15 @@ async def index():
 async def generate_get(
     prompt: str,
     max_input: Optional[int] = None,
-    max_length: int = 256,  # Increased for longer reasoning
+    max_length: int = 64,  # Reduced for concise answers
     min_length: int = 1,
     do_sample: bool = False,
-    temperature: float = 0.2,  # Lower for more deterministic outputs
+    temperature: float = 0.1,  # Very low for focused, deterministic outputs
     top_k: int = 50,
     top_p: float = 0.95,  # Slightly reduced for better quality
     num_return_sequences: int = 1,
     repetition_penalty: Optional[float] = 1.2,  # Added to prevent repetition
-    length_penalty: Optional[float] = None,
+    length_penalty: Optional[float] = 0.8,  # Slight penalty for longer outputs
     keep_prompt: bool = False,
 ):
     """Generate endpoint (GET method - compatible with llm_client_generator.py)."""
