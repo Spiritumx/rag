@@ -59,20 +59,76 @@ request_id_lock = threading.Lock()
 def apply_llama3_template(raw_content: str) -> str:
     """
     将原始 prompt 包装成 Llama-3 的 Chat Template 格式。
-    使用强约束的 System Prompt，专门针对 RAG 任务优化。
+    根据不同的策略类型使用不同的 System Prompt。
+
+    策略识别：
+    - 如果包含 "reasoning step-by-step"：IRCoT CoT 推理阶段，允许详细推理
+    - 如果包含 "Answer the following question." 但不包含 "step-by-step"：Direct QA 模式
+    - 其他：默认精确简短模式
     """
-    
-    # 升级版系统提示：强调精确性、去噪、简短
-    # 这里的 prompt 对应我们刚才讨论的优化方向
-    system_prompt = (
-        "You are a precise QA assistant. "
-        "Read the provided context and answer the user's question.\n\n"
-        "Rules:\n"
-        "1. Answer based ONLY on the context. Do not use your internal knowledge.\n"
-        "2. Be extremely concise. Output ONLY the answer entity or short phrase.\n"
-        "3. Do NOT write full sentences. Do NOT say 'The answer is...'.\n"
-        "4. If the answer is not in the context, output exactly 'I don't know'."
-    )
+
+    # 检测是否为 IRCoT CoT 推理阶段（M 策略）
+    is_ircot_cot = "reasoning step-by-step" in raw_content or "reason step-by-step" in raw_content
+
+    # 检测是否为 Direct QA 阶段
+    is_direct_qa = "Answer the following question" in raw_content and not is_ircot_cot
+
+    if is_ircot_cot:
+        # IRCoT CoT 模式：逐句生成事实陈述，系统会用最后的事实句作为下一次检索的查询
+        # 关键机制：
+        # 1. 生成的句子会被用 spacy 分句，只取第一个句子
+        # 2. 非推理句（事实陈述）会被提取作为下一次检索的查询
+        # 3. 推理句（以 "So", "Thus", "Therefore" 开头）不会用于检索，表示找到答案
+        system_prompt = (
+            "You are a multi-step reasoning agent that answers complex questions by gathering information step-by-step.\n\n"
+            "IMPORTANT CONTEXT:\n"
+            "- The 'A:' field below shows the reasoning chain SO FAR (may be empty at first)\n"
+            "- The examples show COMPLETE chains (built through multiple iterations)\n"
+            "- You will be called multiple times - each time you add ONE new sentence\n\n"
+            "YOUR TASK:\n"
+            "Based on the question, the provided documents, and the reasoning so far, generate EXACTLY ONE new sentence.\n\n"
+            "DECISION LOGIC:\n"
+            "1. IF the documents contain the FINAL ANSWER → Write: 'So the answer is: [answer]'\n"
+            "2. IF the documents contain a KEY FACT or BRIDGE ENTITY needed for next step → State that fact clearly\n"
+            "   - Your sentence will be used as a SEARCH QUERY to retrieve more documents\n"
+            "   - Include specific entities, names, dates, or keywords (not generic words)\n"
+            "   - Example: 'Neville A. Stanton works at University of Southampton.' (good - has entity)\n"
+            "   - NOT: 'We need to find more information.' (bad - no searchable keywords)\n"
+            "3. IF the documents are irrelevant → State what specific information is MISSING\n\n"
+            "CRITICAL RULES:\n"
+            "- Output ONLY ONE sentence (not a paragraph)\n"
+            "- Do NOT repeat what is already in 'A:'\n"
+            "- Do NOT start with 'So'/'Thus'/'Therefore' unless you have the final answer\n"
+            "- Make your sentence rich in specific entities and keywords (it will be used as a search query)\n"
+            "- Base your statement ONLY on the provided documents\n\n"
+            "EXAMPLE:\n"
+            "Q: When was Neville A. Stanton's employer founded?\n"
+            "Call 1 - A: [empty], Docs: [info about Stanton] → Output: 'Neville A. Stanton works at University of Southampton.'\n"
+            "Call 2 - A: Neville A. Stanton works..., Docs: [info about Southampton] → Output: 'University of Southampton was founded in 1862.'\n"
+            "Call 3 - A: Neville A. Stanton works... University of Southampton was founded..., Docs: [...] → Output: 'So the answer is: 1862.'"
+        )
+    elif is_direct_qa:
+        # Direct QA 模式：简短直接的答案（IRCoT 最终回答阶段或其他 Direct QA 策略）
+        system_prompt = (
+            "You are a precise QA assistant.\n\n"
+            "Rules:\n"
+            "1. Read the provided context and answer the question directly.\n"
+            "2. Output ONLY the answer - be concise and specific.\n"
+            "3. Do NOT include phrases like 'The answer is...' or 'Based on...'.\n"
+            "4. Base your answer ONLY on the provided context.\n"
+            "5. If the answer is not in the context, output 'I don't know'."
+        )
+    else:
+        # 默认模式：用于其他策略，保持原有的精确简短逻辑
+        system_prompt = (
+            "You are a precise QA assistant. "
+            "Read the provided context and answer the user's question.\n\n"
+            "Rules:\n"
+            "1. Answer based ONLY on the context. Do not use your internal knowledge.\n"
+            "2. Be extremely concise. Output ONLY the answer entity or short phrase.\n"
+            "3. Do NOT write full sentences. Do NOT say 'The answer is...'.\n"
+            "4. If the answer is not in the context, output exactly 'I don't know'."
+        )
 
     # Llama-3 特殊 Token 定义 (为了代码可读性提取出来)
     header_start = "<|start_header_id|>"

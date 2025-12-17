@@ -29,7 +29,7 @@ local max_buffer_count = 20;  # Number of docs to retrieve before reranking
         "step_by_step_cot_reasoning_gen": {
             "name": "step_by_step_cot_gen",
             "next_model": "step_by_step_exit_controller",
-            "prompt_file": "prompts/hotpotqa/gold_with_2_distractors_context_cot_qa_flan_t5.txt",
+            "prompt_file": "prompts/hotpotqa/gold_with_2_distractors_context_cot_qa_codex.txt",
             "question_prefix": "Answer the following question by reasoning step-by-step.\n",
             "prompt_reader_args": {
                 "shuffle": false,
@@ -42,6 +42,7 @@ local max_buffer_count = 20;  # Number of docs to retrieve before reranking
             "shuffle_paras": false,
             "terminal_return_type": null,
             "disable_exit": true,
+            "max_num_sentences": 20,
             "end_state": "[EOQ]",
             "gen_model": "llm_api",
             "model_name": "Meta-Llama-3-8B-Instruct",
@@ -57,6 +58,7 @@ local max_buffer_count = 20;  # Number of docs to retrieve before reranking
             "answer_extractor_remove_last_fullstop": true,
             "terminal_state_next_model": "generate_main_question",
             "terminal_return_type": "pids",
+            "max_num_sentences": 20,
             "global_max_num_paras": 15,
             "end_state": "[EOQ]",
         },
@@ -69,7 +71,7 @@ local max_buffer_count = 20;  # Number of docs to retrieve before reranking
         "answer_main_question": {
             "name": "llmqa",
             "next_model": "extract_answer",
-            "prompt_file": "prompts/hotpotqa/gold_with_2_distractors_context_direct_qa_flan_t5.txt",
+            "prompt_file": "prompts/hotpotqa/gold_with_2_distractors_context_direct_qa_codex.txt",
             "question_prefix": "Answer the following question.\n",
             "prompt_reader_args": {
                 "shuffle": false,

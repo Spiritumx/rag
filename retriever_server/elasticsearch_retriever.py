@@ -462,15 +462,17 @@ class ElasticsearchRetriever:
             )
             add_hits(splade_hits, weights.get("splade", 1.0))
 
-        merged = sorted(combined.values(), key=lambda item: item["score"], reverse=True)
-        top = []
-        top_hits = []
-        for item in merged[:max_hits_count]:
+        # 准备所有候选文档（不进行粗排截断）
+        all_candidates = []
+        for item in sorted(combined.values(), key=lambda item: item["score"], reverse=True):
             source = item["source"]
             source["score"] = item["score"]
-            top_hits.append(source)
+            all_candidates.append(source)
 
-        top_hits = self._apply_reranker(query_text, top_hits)
+        # 先对所有候选文档应用 reranker，再取前 K 个
+        reranked = self._apply_reranker(query_text, all_candidates)
+        top_hits = reranked[:max_hits_count]
+
         return top_hits
 
 
