@@ -540,6 +540,19 @@ class RetrieveAndResetParagraphsParticipant(ParticipantModel):
                     result = result.json()
                     retrieval = result["retrieval"]
 
+                    # Rolling Eviction: 收集所有候选文档（已有 + 新检索），按分数保留Top-K
+                    candidate_docs = []
+
+                    # 1. 添加已有文档（给予基础分数0.6，略高于新文档默认分以保留证据链）
+                    for title, para in zip(selected_titles, selected_paras):
+                        candidate_docs.append({
+                            "title": title,
+                            "paragraph_text": para,
+                            "score": 0.6,  # 基础分数，保护已有证据
+                            "is_existing": True
+                        })
+
+                    # 2. 添加新检索文档（使用真实rerank分数）
                     for retrieval_item in retrieval:
 
                         if retrieval_item["corpus_name"] != self.source_corpus_name:
@@ -552,15 +565,13 @@ class RetrieveAndResetParagraphsParticipant(ParticipantModel):
                             print("WARNING: Discarding a retrieved paragraph as it's excessively long.")
                             continue
 
+                        # 去重检查（对所有候选文档）
                         if is_para_closely_matching(
-                            selected_titles,
-                            selected_paras,
+                            [d["title"] for d in candidate_docs],
+                            [d["paragraph_text"] for d in candidate_docs],
                             retrieval_item["title"],
                             retrieval_item["paragraph_text"],
                         ):
-                            continue
-
-                        if len(selected_paras) >= self.global_max_num_paras:
                             continue
 
                         if self.valid_titles_are_allowed_titles:
@@ -568,8 +579,33 @@ class RetrieveAndResetParagraphsParticipant(ParticipantModel):
                                 valid_title.lower().replace(" ", "") for valid_title in state.data["valid_titles"]
                             ]
 
-                        selected_titles.append(retrieval_item["title"])
-                        selected_paras.append(retrieval_item["paragraph_text"])
+                        # 使用rerank_score（如果有），否则用原始score，默认0.0
+                        score = retrieval_item.get("rerank_score", retrieval_item.get("score", 0.0))
+
+                        candidate_docs.append({
+                            "title": retrieval_item["title"],
+                            "paragraph_text": retrieval_item["paragraph_text"],
+                            "score": score,
+                            "is_existing": False
+                        })
+
+                    # 3. 按分数排序（降序）
+                    candidate_docs.sort(key=lambda x: x["score"], reverse=True)
+
+                    # 4. 保留Top-K文档
+                    top_docs = candidate_docs[:self.global_max_num_paras]
+
+                    # 5. 统计剔除情况（用于诊断）
+                    num_evicted = len(candidate_docs) - len(top_docs)
+                    if num_evicted > 0:
+                        evicted_existing = sum(1 for doc in candidate_docs[self.global_max_num_paras:] if doc["is_existing"])
+                        evicted_new = num_evicted - evicted_existing
+                        if evicted_existing > 0:
+                            print(f"[Rolling Eviction] Evicted {evicted_existing} existing docs and {evicted_new} new docs (kept top {len(top_docs)} by score)")
+
+                    # 6. 更新selected_titles和selected_paras
+                    selected_titles = [doc["title"] for doc in top_docs]
+                    selected_paras = [doc["paragraph_text"] for doc in top_docs]
 
                 else:
                     self.retrieval_failures_so_far += 1

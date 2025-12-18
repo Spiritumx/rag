@@ -18,7 +18,7 @@ local max_buffer_count = 20;  # Number of docs to retrieve before reranking
             "retriever_port": std.extVar("RETRIEVER_PORT"),
             "retrieval_count": retrieval_count,
             "max_buffer_count": max_buffer_count,
-            "global_max_num_paras": 15,
+            "global_max_num_paras": 40,
             "query_source": "question_or_last_generated_sentence",
             "source_corpus_name": retrieval_corpus_name,
             "document_type": "title_paragraph_text",
@@ -59,7 +59,7 @@ local max_buffer_count = 20;  # Number of docs to retrieve before reranking
             "terminal_state_next_model": "generate_main_question",
             "terminal_return_type": "pids",
             "max_num_sentences": 20,
-            "global_max_num_paras": 15,
+            "global_max_num_paras": 40,
             "end_state": "[EOQ]",
         },
         "generate_main_question": {
