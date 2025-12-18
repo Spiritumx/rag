@@ -506,9 +506,21 @@ class RetrieveAndResetParagraphsParticipant(ParticipantModel):
             retrieval_method = "retrieve_from_elasticsearch"
             backend_query = remove_wh_words(input_query) if self.retrieval_type == "bm25" else input_query
 
+            #  黄金三角策略：构造扩展查询用于Reranker
+            # Expanded Query = Original Question + Bridge Entities (已检索文档的标题)
+            question = state.data["question"]
+            if selected_titles:
+                # 将已有文档标题作为桥梁实体添加到原始问题中
+                bridge_entities = " ".join(selected_titles)
+                expanded_query_for_rerank = f"{question} {bridge_entities}"
+            else:
+                # 首次迭代，只使用原始问题
+                expanded_query_for_rerank = question
+
             params = {
                 "retrieval_method": retrieval_method,
-                "query_text": backend_query,
+                "query_text": backend_query,  # Initial retrieval使用生成句子
+                "rerank_query_text": expanded_query_for_rerank,  #  Rerank使用扩展查询
                 "max_hits_count": self.retrieval_count,
                 "max_buffer_count": self.max_buffer_count,
                 "corpus_name": self.source_corpus_name,

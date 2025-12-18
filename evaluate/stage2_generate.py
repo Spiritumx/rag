@@ -10,6 +10,7 @@ import subprocess
 import tempfile
 from collections import defaultdict
 from tqdm import tqdm
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -18,6 +19,7 @@ from evaluate.utils.config_loader import ConfigLoader
 from evaluate.utils.data_loader import DataLoader
 from evaluate.utils.result_manager import ResultManager
 from evaluate.configs.action_to_config_mapping import ActionConfigMapper
+from evaluate.M_core import execute_real_multihop  # M策略专用多跳函数
 
 
 class Stage2Generator:
@@ -119,22 +121,96 @@ class Stage2Generator:
             print(f"  Processing {len(unprocessed_qids)}/{len(qids)} questions")
 
             try:
-                # Get config for this action
-                config_path = self.config_mapper.get_config_path(action, dataset_name)
+                # 🔥 M策略：使用新的简洁多跳实现
+                if action == 'M':
+                    print(f"  Using new simplified multi-hop implementation (execute_real_multihop)")
 
-                # Create temporary input file for this action group
-                temp_input_file = self.create_temp_input_file(
-                    dataset_name, action, unprocessed_qids, test_data_map
-                )
+                    # 准备配置
+                    retriever_config = {
+                        'host': self.config['retriever']['host'],
+                        'port': self.config['retriever']['port']
+                    }
+                    llm_config = {
+                        'host': self.config['llm']['server_host'],
+                        'port': self.config['llm']['server_port']
+                    }
 
-                # Run generation using configurable_inference
-                result = self.run_inference(
-                    config_path=config_path,
-                    input_file=temp_input_file,
-                    dataset_name=dataset_name,
-                    action=action,
-                    num_questions=len(unprocessed_qids)
-                )
+                    # 获取并行线程数
+                    parallel_threads = self.config.get('execution', {}).get('parallel_threads', 1)
+                    print(f"  Using {parallel_threads} parallel threads for multi-hop reasoning")
+
+                    # 定义单个问题的处理函数
+                    def process_single_question(qid):
+                        question_text = test_data_map[qid]['question_text']
+                        try:
+                            result = execute_real_multihop(
+                                query=question_text,
+                                retriever_config=retriever_config,
+                                llm_config=llm_config,
+                                dataset_name=dataset_name
+                            )
+                            return qid, result, None
+                        except Exception as e:
+                            return qid, None, str(e)
+
+                    # 并行处理问题
+                    predictions = {}
+                    chains = {}
+                    contexts = {}
+
+                    with ThreadPoolExecutor(max_workers=parallel_threads) as executor:
+                        # 提交所有任务
+                        future_to_qid = {
+                            executor.submit(process_single_question, qid): qid
+                            for qid in unprocessed_qids
+                        }
+
+                        # 使用tqdm显示进度
+                        with tqdm(total=len(unprocessed_qids), desc="  Multi-hop reasoning") as pbar:
+                            for future in as_completed(future_to_qid):
+                                qid, result, error = future.result()
+
+                                if error:
+                                    print(f"\n    Error processing {qid}: {error}")
+                                    predictions[qid] = "I don't know"
+                                    chains[qid] = f"Error: {error}"
+                                    contexts[qid] = []
+                                else:
+                                    predictions[qid] = result['answer']
+                                    chains[qid] = result['chain']
+                                    contexts[qid] = result['contexts']
+
+                                pbar.update(1)
+
+                    # 构造结果
+                    result = {
+                        'predictions': predictions,
+                        'chains': chains,
+                        'contexts': contexts
+                    }
+
+                else:
+                    # 其他策略：使用原有的subprocess方式
+                    # Get config for this action
+                    config_path = self.config_mapper.get_config_path(action, dataset_name)
+
+                    # Create temporary input file for this action group
+                    temp_input_file = self.create_temp_input_file(
+                        dataset_name, action, unprocessed_qids, test_data_map
+                    )
+
+                    # Run generation using configurable_inference
+                    result = self.run_inference(
+                        config_path=config_path,
+                        input_file=temp_input_file,
+                        dataset_name=dataset_name,
+                        action=action,
+                        num_questions=len(unprocessed_qids)
+                    )
+
+                    # Cleanup temp file
+                    if os.path.exists(temp_input_file):
+                        os.remove(temp_input_file)
 
                 # Merge predictions, chains, and contexts
                 all_predictions.update(result['predictions'])
@@ -143,10 +219,6 @@ class Stage2Generator:
 
                 # Save checkpoint
                 self.result_manager.save_stage2_results(dataset_name, all_predictions)
-
-                # Cleanup temp file
-                if os.path.exists(temp_input_file):
-                    os.remove(temp_input_file)
 
                 print(f"  ✓ Completed {len(result['predictions'])} predictions for action {action}")
 

@@ -48,6 +48,7 @@ class UnifiedRetriever:
         corpus_name: str = None,
         retrieval_backend: str = "bm25",
         hybrid_weights=None,
+        rerank_query_text: str = None,  # 新增：独立的rerank query
     ) -> List[Dict]:
 
         assert document_type in ("title", "paragraph_text", "title_paragraph_text")
@@ -75,6 +76,7 @@ class UnifiedRetriever:
                 max_buffer_count=max_buffer_count,
                 retrieval_backend=retrieval_backend,
                 hybrid_weights=hybrid_weights,
+                rerank_query_text=rerank_query_text,  # 传递rerank query
             )
 
         elif document_type == "title":

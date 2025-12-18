@@ -76,6 +76,7 @@ class ElasticsearchRetriever:
         max_hits_count: int = 10,
         retrieval_backend: str = "bm25",
         hybrid_weights: Optional[Dict[str, float]] = None,
+        rerank_query_text: str = None,  # 新增：独立的rerank query
     ) -> List[Dict]:
 
         retrieval_backend = (retrieval_backend or "bm25").lower()
@@ -122,6 +123,7 @@ class ElasticsearchRetriever:
                 max_buffer_count=max_buffer_count,
                 max_hits_count=max_hits_count,
                 weights=weights,
+                rerank_query_text=rerank_query_text,  # 传递rerank query
             )
 
         if allowed_titles is not None:
@@ -416,6 +418,7 @@ class ElasticsearchRetriever:
         max_buffer_count: int,
         max_hits_count: int,
         weights: Dict[str, float],
+        rerank_query_text: str = None,  # 新增：独立的rerank query
     ) -> List[Dict]:
         combined: Dict[str, Dict] = {}
 
@@ -428,6 +431,7 @@ class ElasticsearchRetriever:
                     combined[doc_id] = {"source": hit.copy(), "score": 0.0}
                 combined[doc_id]["score"] += weight * hit.get("score", 0.0)
 
+        # Phase 1-3: Initial Retrieval 使用生成句子 (query_text)
         bm25_hits = self._retrieve_bm25(
             corpus_name=corpus_name,
             query_text=query_text,
@@ -469,8 +473,16 @@ class ElasticsearchRetriever:
             source["score"] = item["score"]
             all_candidates.append(source)
 
-        # 先对所有候选文档应用 reranker，再取前 K 个
-        reranked = self._apply_reranker(query_text, all_candidates)
+        # Phase 4: Reranking 使用扩展查询 (原始问题 + 桥梁实体)
+        # 黄金三角策略：Reranker使用更丰富的上下文
+        final_rerank_query = rerank_query_text if rerank_query_text else query_text
+
+        # 诊断日志：验证黄金三角策略
+        if rerank_query_text and rerank_query_text != query_text:
+            print(f"\n[Golden Triangle] Retrieval Query: {query_text[:80]}...")
+            print(f"[Golden Triangle] Rerank Query: {final_rerank_query[:120]}...")
+
+        reranked = self._apply_reranker(final_rerank_query, all_candidates)
         top_hits = reranked[:max_hits_count]
 
         return top_hits
