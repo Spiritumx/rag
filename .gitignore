@@ -6,3 +6,4 @@ retriever_server/model/*
 .pixi/*
 !.pixi/config.toml
 pixi.lock
+*.pyc

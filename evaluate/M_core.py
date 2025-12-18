@@ -43,7 +43,14 @@ def execute_real_multihop(
     retriever_url = f"http://{retriever_config['host']}:{retriever_config['port']}/retrieve/"
     llm_url = f"http://{llm_config['host']}:{llm_config['port']}/generate"
 
+    # 添加调试日志
+    print(f"[M_core] Starting multi-hop reasoning for query: {query[:100]}...")
+    print(f"[M_core] Retriever: {retriever_config}")
+    print(f"[M_core] LLM: {llm_config}")
+
     for step in range(MAX_HOPS):
+        print(f"[M_core] ========== Hop {step+1}/{MAX_HOPS} ==========")
+
         # --- Step A: 让 LLM 决定下一步搜什么 ---
         # 这是一个 "Thought" 过程
         # 添加Few-shot Examples提高生成质量
@@ -76,6 +83,7 @@ Instructions:
 Next Search Query:"""
 
         # 调用LLM API生成查询
+        print(f"[M_core] Calling LLM to generate next query...")
         try:
             response = requests.get(
                 llm_url,
@@ -88,7 +96,9 @@ Next Search Query:"""
                 timeout=60
             )
             next_query = response.json()['text'].strip()
+            print(f"[M_core] LLM generated query: '{next_query}'")
         except Exception as e:
+            print(f"[M_core] ERROR calling LLM: {e}")
             reasoning_steps.append(f"[Hop {step+1}] Error calling LLM: {e}")
             break
 
@@ -103,24 +113,34 @@ Next Search Query:"""
         # --- Step C: 执行混合检索 ---
         # 修正：中间步骤的Rerank只用next_query（当前搜索意图）
         # 避免Reranker因为"CEO"压低"wife"文档的分数
+        print(f"[M_core] Calling retriever with query: '{next_query}'")
         try:
             # 调用Retriever API
+            retrieval_params = {
+                "retrieval_method": "retrieve_from_elasticsearch",
+                "query_text": next_query,        # Initial retrieval
+                "rerank_query_text": next_query,  #  中间步骤：Rerank也用当前query
+                "max_hits_count": 10,             #  返回Top10（混合检索：BM25+HNSW+SPLADE=60候选→Rerank→Top10）
+                "max_buffer_count": 60,           #  Buffer保留60个候选（每种检索20个）
+                "corpus_name": "wiki",
+                "document_type": "title_paragraph_text",
+                "retrieval_backend": "hybrid"
+            }
+            print(f"[M_core] Retrieval params: {retrieval_params}")
+
             response = requests.post(
                 retriever_url,
-                json={
-                    "retrieval_method": "retrieve_from_elasticsearch",
-                    "query_text": next_query,        # Initial retrieval
-                    "rerank_query_text": next_query,  #  中间步骤：Rerank也用当前query
-                    "max_hits_count": 10,             #  返回Top10（混合检索：BM25+HNSW+SPLADE=60候选→Rerank→Top10）
-                    "max_buffer_count": 60,           #  Buffer保留60个候选（每种检索20个）
-                    "corpus_name": "wiki",
-                    "document_type": "title_paragraph_text",
-                    "retrieval_backend": "hybrid"
-                },
+                json=retrieval_params,
                 timeout=30
             )
+
+            print(f"[M_core] Retriever response status: {response.status_code}")
             hits = response.json()['retrieval']
+            print(f"[M_core] Retrieved {len(hits)} documents")
         except Exception as e:
+            print(f"[M_core] ERROR calling retriever: {e}")
+            import traceback
+            traceback.print_exc()
             reasoning_steps.append(f"[Hop {step+1}] Error calling retriever: {e}")
             hits = []
 
