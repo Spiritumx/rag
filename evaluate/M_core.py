@@ -95,10 +95,45 @@ Next Search Query:"""
                 },
                 timeout=60
             )
-            next_query = response.json()['text'].strip()
+
+            # 检查响应状态
+            print(f"[M_core] LLM response status: {response.status_code}")
+
+            # 解析响应
+            response_json = response.json()
+            print(f"[M_core] LLM response JSON keys: {list(response_json.keys())}")
+
+            # 尝试不同的key（支持多种LLM服务器格式）
+            if 'generated_texts' in response_json:
+                # Llama autobatch server format: {"generated_texts": [text]}
+                texts = response_json['generated_texts']
+                next_query = texts[0].strip() if isinstance(texts, list) and len(texts) > 0 else ""
+            elif 'text' in response_json:
+                # Simple format: {"text": "..."}
+                next_query = response_json['text'].strip()
+            elif 'generated_text' in response_json:
+                # Single text format: {"generated_text": "..."}
+                next_query = response_json['generated_text'].strip()
+            elif 'response' in response_json:
+                # Response format: {"response": "..."}
+                next_query = response_json['response'].strip()
+            elif 'choices' in response_json:
+                # OpenAI format: {"choices": [{"text": "..."}]}
+                choices = response_json['choices']
+                if isinstance(choices, list) and len(choices) > 0:
+                    next_query = choices[0].get('text', '').strip()
+                else:
+                    next_query = ""
+            else:
+                print(f"[M_core] ERROR: Unexpected LLM response format: {response_json}")
+                reasoning_steps.append(f"[Hop {step+1}] Error: LLM returned unexpected format: {list(response_json.keys())}")
+                break
+
             print(f"[M_core] LLM generated query: '{next_query}'")
         except Exception as e:
             print(f"[M_core] ERROR calling LLM: {e}")
+            import traceback
+            traceback.print_exc()
             reasoning_steps.append(f"[Hop {step+1}] Error calling LLM: {e}")
             break
 
@@ -318,9 +353,26 @@ Answer:"""
             },
             timeout=120
         )
-        answer = response.json()['text'].strip()
+
+        # 解析LLM响应（支持多种格式）
+        response_json = response.json()
+        if 'generated_texts' in response_json:
+            # Llama autobatch server format
+            texts = response_json['generated_texts']
+            answer = texts[0].strip() if isinstance(texts, list) and len(texts) > 0 else "I don't know"
+        elif 'text' in response_json:
+            answer = response_json['text'].strip()
+        elif 'generated_text' in response_json:
+            answer = response_json['generated_text'].strip()
+        else:
+            print(f"[M_core] ERROR: Unexpected LLM response format for answer: {list(response_json.keys())}")
+            answer = "I don't know"
+
         reasoning_steps.append(f"[Final] Generated answer: {answer}")
     except Exception as e:
+        print(f"[M_core] ERROR generating answer: {e}")
+        import traceback
+        traceback.print_exc()
         reasoning_steps.append(f"[Final] Error generating answer: {e}")
         answer = "I don't know"
 
