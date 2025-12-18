@@ -31,12 +31,16 @@ class AdvancedIRCoTAnalyzer:
         self.dataset = dataset
 
         # 1. 加载 Chains (推理链)
+        # 支持多种命名格式
         chain_files = [
-            f"{dataset}_M_chains.txt",
-            f"{dataset}_chains.txt"
+            f"{dataset}_predictions_chains.txt",      # 标准格式：musique_predictions_chains.txt
+            f"{dataset}_M_chains.txt",                 # M策略格式：musique_M_chains.txt
+            f"{dataset}_chains.txt",                   # 简化格式：musique_chains.txt
+            f"{dataset}.txt",                          # 最简格式：musique.txt
         ]
         chains_path = self._find_file(chain_files)
         if chains_path:
+            print(f"  📄 找到 Chains 文件: {os.path.basename(chains_path)}")
             with open(chains_path, 'r', encoding='utf-8') as f:
                 # 过滤空行，按 Q/A 块读取
                 content = f.read().strip()
@@ -53,15 +57,19 @@ class AdvancedIRCoTAnalyzer:
             print(f"  ✓ Chains: {len(self.chains)} 条")
         else:
             print(f"  ❌ 找不到 Chains 文件")
+            print(f"     尝试了以下文件名:")
+            for fname in chain_files:
+                print(f"       - {fname}")
 
         # 2. 加载 Contexts (检索到的文档)
         ctx_files = [
-            f"{dataset}_M_contexts.json",
-            f"{dataset}_contexts.json",
-            f"{dataset}_predictions_contexts.json"
+            f"{dataset}_predictions_contexts.json",    # 标准格式
+            f"{dataset}_M_contexts.json",              # M策略格式
+            f"{dataset}_contexts.json",                # 简化格式
         ]
         ctx_path = self._find_file(ctx_files)
         if ctx_path:
+            print(f"  📄 找到 Contexts 文件: {os.path.basename(ctx_path)}")
             with open(ctx_path, 'r', encoding='utf-8') as f:
                 self.contexts = json.load(f)
             print(f"  ✓ Contexts: {len(self.contexts)} 个")
@@ -263,25 +271,86 @@ class AdvancedIRCoTAnalyzer:
             print("3. **No Answer**: 检索彻底失败，模型无法推导。需要检查 Hit Rate。")
 
 def main():
+    print("=" * 80)
+    print("IRCoT 高级诊断工具 (Advanced IRCoT Diagnostic Tool)")
+    print("=" * 80)
+    print()
+
+    # 获取输出目录
     if len(sys.argv) < 2:
-        # 默认路径，你可以修改这里
-        output_dir = "evaluate/outputs/stage2_predictions"
+        print("💡 提示：可以通过命令行参数指定输出目录")
+        print("   例如: python analyze_ircot_detailed.py /path/to/outputs")
+        print()
+        output_dir = input("请输入输出目录路径 [默认: evaluate/outputs/stage2_predictions]: ").strip()
+        if not output_dir:
+            output_dir = "evaluate/outputs/stage2_predictions"
     else:
         output_dir = sys.argv[1]
 
+    # 标准化路径（处理相对路径）
+    if not os.path.isabs(output_dir):
+        output_dir = os.path.abspath(output_dir)
+
+    print(f"\n📁 输出目录: {output_dir}")
+
     if not os.path.exists(output_dir):
         print(f"❌ 路径不存在: {output_dir}")
-        print("请提供包含 _chains.txt 的目录")
+        print("\n请确保:")
+        print("  1. 路径正确")
+        print("  2. 已运行过评估并生成了输出文件")
+        print("  3. 输出目录包含 *_chains.txt 和 *_contexts.json 文件")
         return
 
-    # 这里填写你要分析的数据集名称
-    datasets = ['musique', '2wikimultihopqa'] 
-    
+    # 列出目录中的文件，帮助用户确认
+    print(f"\n📋 目录中的文件:")
+    try:
+        files = os.listdir(output_dir)
+        chain_files = [f for f in files if '_chain' in f.lower() and f.endswith('.txt')]
+        context_files = [f for f in files if '_context' in f.lower() and f.endswith('.json')]
+
+        if chain_files:
+            print(f"  找到 {len(chain_files)} 个 chains 文件:")
+            for f in chain_files[:5]:  # 只显示前5个
+                print(f"    - {f}")
+        else:
+            print("  ⚠️  未找到 chains 文件 (*_chains.txt)")
+
+        if context_files:
+            print(f"  找到 {len(context_files)} 个 contexts 文件:")
+            for f in context_files[:5]:
+                print(f"    - {f}")
+        else:
+            print("  ⚠️  未找到 contexts 文件 (*_contexts.json)")
+    except Exception as e:
+        print(f"  ❌ 无法列出文件: {e}")
+
+    # 获取要分析的数据集
+    print()
+    dataset_input = input("请输入要分析的数据集 (逗号分隔) [默认: musique,2wikimultihopqa]: ").strip()
+    if not dataset_input:
+        datasets = ['musique', '2wikimultihopqa']
+    else:
+        datasets = [ds.strip() for ds in dataset_input.split(',')]
+
+    print(f"\n🎯 将分析以下数据集: {', '.join(datasets)}")
+    print()
+
+    # 运行分析
     for ds in datasets:
+        print("\n" + "=" * 80)
+        print(f"开始分析: {ds}")
+        print("=" * 80)
+
         analyzer = AdvancedIRCoTAnalyzer(output_dir)
         analyzer.load_data(ds)
         if analyzer.chains:
             analyzer.run_analysis()
+        else:
+            print(f"\n⚠️  跳过 {ds}: 未找到有效的 chains 数据")
+            print(f"   请检查文件命名是否符合以下格式之一:")
+            print(f"     - {ds}_predictions_chains.txt")
+            print(f"     - {ds}_M_chains.txt")
+            print(f"     - {ds}_chains.txt")
 
 if __name__ == "__main__":
     main()
