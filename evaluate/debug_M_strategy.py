@@ -573,10 +573,25 @@ Answer:"""
             print(f"Question {i}/{len(questions)}")
             print(f"{'='*80}")
 
+            # 提取黄金答案
+            golden_answers = []
+            answers_objects = q.get('answers_objects', [])
+            if answers_objects:
+                # MuSiQue格式：answers_objects[0]['spans']
+                for ans_obj in answers_objects:
+                    if 'spans' in ans_obj:
+                        golden_answers.extend(ans_obj['spans'])
+                    elif 'text' in ans_obj:
+                        golden_answers.append(ans_obj['text'])
+
+            # 如果没有找到答案，尝试使用answer字段（某些数据集）
+            if not golden_answers and 'answer' in q:
+                golden_answers = [q['answer']]
+
             debug_log = self.execute_multihop_debug(
                 question=q['question_text'],
                 question_id=q['question_id'],
-                golden_answers=[ans['text'] for ans in q.get('answers_objects', [])]
+                golden_answers=golden_answers
             )
 
             # 保存单个问题的日志
