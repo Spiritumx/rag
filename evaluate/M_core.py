@@ -43,13 +43,7 @@ def execute_real_multihop(
     retriever_url = f"http://{retriever_config['host']}:{retriever_config['port']}/retrieve/"
     llm_url = f"http://{llm_config['host']}:{llm_config['port']}/generate"
 
-    # 添加调试日志
-    print(f"[M_core] Starting multi-hop reasoning for query: {query[:100]}...")
-    print(f"[M_core] Retriever: {retriever_config}")
-    print(f"[M_core] LLM: {llm_config}")
-
     for step in range(MAX_HOPS):
-        print(f"[M_core] ========== Hop {step+1}/{MAX_HOPS} ==========")
 
         # --- Step A: 让 LLM 决定下一步搜什么 ---
         # 这是一个 "Thought" 过程
@@ -83,7 +77,6 @@ Instructions:
 Next Search Query:"""
 
         # 调用LLM API生成查询
-        print(f"[M_core] Calling LLM to generate next query...")
         try:
             response = requests.get(
                 llm_url,
@@ -96,12 +89,8 @@ Next Search Query:"""
                 timeout=60
             )
 
-            # 检查响应状态
-            print(f"[M_core] LLM response status: {response.status_code}")
-
             # 解析响应
             response_json = response.json()
-            print(f"[M_core] LLM response JSON keys: {list(response_json.keys())}")
 
             # 尝试不同的key（支持多种LLM服务器格式）
             if 'generated_texts' in response_json:
@@ -125,13 +114,10 @@ Next Search Query:"""
                 else:
                     next_query = ""
             else:
-                print(f"[M_core] ERROR: Unexpected LLM response format: {response_json}")
                 reasoning_steps.append(f"[Hop {step+1}] Error: LLM returned unexpected format: {list(response_json.keys())}")
                 break
 
-            print(f"[M_core] LLM generated query: '{next_query}'")
         except Exception as e:
-            print(f"[M_core] ERROR calling LLM: {e}")
             import traceback
             traceback.print_exc()
             reasoning_steps.append(f"[Hop {step+1}] Error calling LLM: {e}")
@@ -148,7 +134,6 @@ Next Search Query:"""
         # --- Step C: 执行混合检索 ---
         # 修正：中间步骤的Rerank只用next_query（当前搜索意图）
         # 避免Reranker因为"CEO"压低"wife"文档的分数
-        print(f"[M_core] Calling retriever with query: '{next_query}'")
         try:
             # 调用Retriever API
             retrieval_params = {
@@ -161,7 +146,6 @@ Next Search Query:"""
                 "document_type": "title_paragraph_text",
                 "retrieval_backend": "hybrid"
             }
-            print(f"[M_core] Retrieval params: {retrieval_params}")
 
             response = requests.post(
                 retriever_url,
@@ -169,11 +153,8 @@ Next Search Query:"""
                 timeout=30
             )
 
-            print(f"[M_core] Retriever response status: {response.status_code}")
             hits = response.json()['retrieval']
-            print(f"[M_core] Retrieved {len(hits)} documents")
         except Exception as e:
-            print(f"[M_core] ERROR calling retriever: {e}")
             import traceback
             traceback.print_exc()
             reasoning_steps.append(f"[Hop {step+1}] Error calling retriever: {e}")
@@ -365,12 +346,10 @@ Answer:"""
         elif 'generated_text' in response_json:
             answer = response_json['generated_text'].strip()
         else:
-            print(f"[M_core] ERROR: Unexpected LLM response format for answer: {list(response_json.keys())}")
             answer = "I don't know"
 
         reasoning_steps.append(f"[Final] Generated answer: {answer}")
     except Exception as e:
-        print(f"[M_core] ERROR generating answer: {e}")
         import traceback
         traceback.print_exc()
         reasoning_steps.append(f"[Final] Error generating answer: {e}")

@@ -125,10 +125,6 @@ class Stage2Generator:
             try:
                 # 🔥 M策略：使用新的简洁多跳实现
                 if action == 'M':
-                    print(f"\n  🔥 M STRATEGY TRIGGERED 🔥")
-                    print(f"  Using new simplified multi-hop implementation (execute_real_multihop)")
-                    print(f"  Questions to process: {unprocessed_qids[:5]}{'...' if len(unprocessed_qids) > 5 else ''}")
-
                     # 准备配置
                     retriever_config = {
                         'host': self.config['retriever']['host'],
@@ -139,9 +135,6 @@ class Stage2Generator:
                         'port': self.config['llm']['server_port']
                     }
 
-                    print(f"  Retriever config: {retriever_config}")
-                    print(f"  LLM config: {llm_config}")
-
                     # 获取并行线程数
                     parallel_threads = self.config.get('execution', {}).get('parallel_threads', 1)
                     print(f"  Using {parallel_threads} parallel threads for multi-hop reasoning")
@@ -149,7 +142,6 @@ class Stage2Generator:
                     # 定义单个问题的处理函数
                     def process_single_question(qid):
                         question_text = test_data_map[qid]['question_text']
-                        print(f"\n  [Worker] Processing question {qid}: {question_text[:80]}...")
                         try:
                             result = execute_real_multihop(
                                 query=question_text,
@@ -157,10 +149,8 @@ class Stage2Generator:
                                 llm_config=llm_config,
                                 dataset_name=dataset_name
                             )
-                            print(f"  [Worker] Completed {qid}: answer='{result['answer'][:50]}...'")
                             return qid, result, None
                         except Exception as e:
-                            print(f"  [Worker] ERROR processing {qid}: {e}")
                             import traceback
                             traceback.print_exc()
                             return qid, None, str(e)
