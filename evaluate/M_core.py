@@ -4,7 +4,6 @@ import traceback
 from typing import List, Dict, Any, Set
 
 def _extract_llm_text(response_json: Dict[str, Any]) -> str:
-    """辅助函数：适配多种 LLM API 的响应格式"""
     text = ""
     if 'generated_texts' in response_json:
         texts = response_json['generated_texts']
@@ -19,18 +18,54 @@ def _extract_llm_text(response_json: Dict[str, Any]) -> str:
             text = choices[0].get('text', '') or choices[0].get('message', {}).get('content', '')
     return text.strip()
 
-def _clean_query(query: str) -> str:
+def _remove_conversational_phrases(query: str) -> str:
     """
-    强力清洗查询语句，转化为关键词搜索模式。
+    清洗对话式废话（如 "I need to find"），保留长实体和关键词。
     """
-    # 1. 移除常见的自然语言引导词
-    query = re.sub(r'^(search for|search|find|query|look for|what is|who is|where is|tell me about):?\s*', '', query, flags=re.IGNORECASE)
+    original_query = query
+    query = query.strip().strip('"\'[]').lower()
     
-    # 2. 移除问号和引号
-    query = query.replace('?', '').replace('"', '').replace("'", "").strip()
+    # 定义垃圾短语 (LLM 喜欢说的废话)
+    stop_phrases = [
+        "i need to find", "i need to identify", "we need to", "try to find",
+        "search for", "looking for", "find out", "figure out",
+        "tell me", "what is", "who is", "where is", "when was",
+        "the name of", "information about", "details regarding",
+        "associated with", "related to", "step 1", "next step",
+        "first step", "bridge entity"
+    ]
     
-    # 3. 如果 query 依然很长且包含 stop words，可以考虑保留实体（这里简单处理，依赖 LLM 的自觉性）
+    for phrase in stop_phrases:
+        if phrase in query:
+            query = query.replace(phrase, " ")
+            
+    # 移除多余空格
+    query = " ".join(query.split())
+    
+    # 如果清洗后变空了（说明全是废话），或者清洗出了问题，回退到原始 query（小写化）
+    if len(query) < 1:
+        return original_query.strip().lower()
+
     return query
+
+def _is_semantically_similar(new_query: str, history_queries: Set[str], threshold: float = 0.9) -> bool:
+    """
+    语义去重 (Jaccard)。阈值设为 0.9，避免误伤长实体的细微差别。
+    """
+    new_tokens = set(new_query.lower().split())
+    if not new_tokens: return False
+    
+    for old_q in history_queries:
+        old_tokens = set(old_q.lower().split())
+        if not old_tokens: continue
+        
+        intersection = new_tokens.intersection(old_tokens)
+        union = new_tokens.union(old_tokens)
+        similarity = len(intersection) / len(union)
+        
+        if similarity >= threshold:
+            return True
+    return False
 
 def execute_real_multihop(
     query: str,
@@ -39,17 +74,17 @@ def execute_real_multihop(
     dataset_name: str
 ) -> dict:
     """
-    Expert Agentic RAG (One-Shot CoT Version)
+    Expert Agentic RAG (Warm-Start Version)
     
-    改进点:
-    1. One-Shot Example: 在 Prompt 中包含一个完美的推理范例，大幅减少格式错误。
-    2. Explicit Decomposition: 强制模型寻找 "Bridge Entity"。
-    3. Keyword Enforcement: 引导模型生成关键词而非句子。
+    Updates:
+    1. Step 0: Initial Retrieval using the original query.
+    2. Relaxed Cleaning: No longer truncates long queries, just removes chatty phrases.
+    3. Context Injection: Keeps the logic of feeding investigation logs to final generation.
     """
     
     # === 配置 ===
-    MAX_HOPS = 6           # 6步通常足够，太多容易发散
-    MAX_RETRIES = 3        # 单步重试
+    MAX_HOPS = 6
+    MAX_RETRIES = 3
     MAX_CONTEXT_DOCS = 40
     
     dataset_to_corpus = {
@@ -72,17 +107,60 @@ def execute_real_multihop(
 
     print(f"  [Agent] Start: {query[:60]}... (Corpus: {corpus_name})")
 
-    current_context_snippet = "No information gathered yet."
-    should_stop_reasoning = False
+    # ==============================================================================
+    # Step 0: 初始检索 (Warm Start)
+    # ==============================================================================
+    print("  [Agent] Step 0: Initial Retrieval with original query...")
+    try:
+        r_resp = requests.post(
+            retriever_url,
+            json={
+                "retrieval_method": "retrieve_from_elasticsearch",
+                "query_text": query,  # 直接用原始问题搜
+                "rerank_query_text": query,
+                "max_hits_count": 8,  # 初始检索多拿一点，建立背景
+                "max_buffer_count": 40,
+                "corpus_name": corpus_name,
+                "document_type": "title_paragraph_text",
+                "retrieval_backend": "hybrid"
+            }, timeout=30
+        )
+        hits = r_resp.json().get('retrieval', [])
+        
+        # 处理结果
+        init_snippets = []
+        for h in hits:
+            key = f"{h.get('title')} {h.get('paragraph_text')[:20]}"
+            if key not in all_retrieved_docs:
+                all_retrieved_docs[key] = h
+                init_snippets.append(f"Title: {h['title']}\nContent: {h['paragraph_text'][:200]}...")
+        
+        if init_snippets:
+            current_context_snippet = "\n---\n".join(init_snippets[:3])
+            titles = [h['title'] for h in hits[:3]]
+            # 写入历史
+            history_log.append(f"Initial Search '{query}' -> Found docs: {', '.join(titles)}")
+            executed_queries.add(query.lower()) # 标记原问题已搜过（小写）
+            executed_queries.add(_remove_conversational_phrases(query.lower()))
+        else:
+            current_context_snippet = "Initial search returned no direct results."
+            history_log.append(f"Initial Search '{query}' -> No direct results.")
+            
+        reasoning_chain.append(f"[Step 0] Initial Search Found {len(hits)} hits.")
+        
+    except Exception as e:
+        print(f"  [Agent] Initial search failed: {e}")
+        current_context_snippet = "Initial search failed."
 
     # ==============================================================================
     # Stage 1: 推理循环
     # ==============================================================================
+    should_stop_reasoning = False
+    
     for step in range(MAX_HOPS):
         if should_stop_reasoning:
             break
 
-        # --- 重试循环 ---
         valid_next_query = None
         feedback_msg = ""
         thought = ""
@@ -91,14 +169,18 @@ def execute_real_multihop(
         for attempt in range(MAX_RETRIES):
             history_str = "\n".join([f"Hop {i+1}: {h}" for i, h in enumerate(history_log)]) if history_log else "None"
             
-            # === 核心 Prompt：包含 One-Shot 示例 ===
-            base_prompt = f"""You are an expert multi-hop question answering agent.
-Your goal is to break down a complex question into simple Keyword Searches to find the answer.
+            # Prompt 微调：强调基于 Current Info (Step 0 的结果) 进行分解
+            base_prompt = f"""You are an expert research agent. Break down the question into KEYWORD SEARCHES.
+
+*** RULES ***
+1. Check "Current Info" first. If it helps, move to the next logical entity.
+2. DO NOT repeat "Past Actions".
+3. OUTPUT ONLY KEYWORDS (Entities, Names, Places).
 
 *** EXAMPLE ***
-Question: "The director of the film 'Titanic' was born in which country?"
+Question: "Who is the director of the film Titanic?"
 Hop 1:
-Thought: I need to find the director of 'Titanic' first. The bridge entity is the director's name.
+Thought: Initial search found Titanic movie info. I need the director's name specifically.
 Action: Search [Titanic film director]
 Result: Found James Cameron.
 Hop 2:
@@ -118,21 +200,16 @@ Past Actions:
 Current Info:
 {current_context_snippet}
 
-Instructions:
-1. Identify the missing "Bridge Entity" needed to proceed.
-2. If you know the answer based on "Current Info", output "Action: Answer".
-3. Otherwise, output a KEYWORD SEARCH. Do NOT output sentences like "Search for the...".
-4. STRICT FORMAT:
-Thought: <short reasoning>
+Format:
+Thought: <reasoning>
 Action: <Search [Keywords] OR Answer>"""
 
             if feedback_msg:
-                final_prompt = base_prompt + f"\n\n*** ERROR IN PREVIOUS ATTEMPT ***\n{feedback_msg}\nPlease fix."
+                final_prompt = base_prompt + f"\n\n*** ERROR ***\n{feedback_msg}"
             else:
                 final_prompt = base_prompt
 
             try:
-                # 调低 temperature，让它严格模仿 Example
                 resp = requests.get(
                     llm_url,
                     params={'prompt': final_prompt, 'max_length': 128, 'temperature': 0.1}, 
@@ -144,18 +221,17 @@ Action: <Search [Keywords] OR Answer>"""
                 should_stop_reasoning = True
                 break
 
-            # === 解析 ===
+            # 解析
             thought_match = re.search(r'Thought:(.*?)(Action:|$)', llm_output, re.DOTALL | re.IGNORECASE)
             thought = thought_match.group(1).strip() if thought_match else ""
 
             action_match = re.search(r'Action:\s*(.*)', llm_output, re.IGNORECASE)
             if not action_match:
-                # 尝试找 Search [...]
                 fallback = re.search(r'Search\s*\[(.*?)\]', llm_output, re.IGNORECASE)
                 if fallback:
                     action_raw = f"Search [{fallback.group(1)}]"
                 else:
-                    feedback_msg = "Format Error: Use 'Action: Search [Keywords]' or 'Action: Answer'."
+                    feedback_msg = "Format Error: Output 'Action: Search [Keywords]'."
                     continue
             else:
                 action_raw = action_match.group(1).strip().split('\n')[0]
@@ -175,30 +251,30 @@ Action: <Search [Keywords] OR Answer>"""
             elif action_raw.lower().startswith("search"):
                 raw_q = action_raw[6:].strip()
             else:
-                feedback_msg = "Format Error: Action must start with Search or Answer."
+                feedback_msg = "Format Error."
                 continue
             
-            # 清洗 & 验证
-            temp_query = _clean_query(raw_q)
+            # 清洗对话式废话，保留长实体
+            clean_q = _remove_conversational_phrases(raw_q)
             
-            if len(temp_query) < 2:
+            if len(clean_q) < 2:
                 feedback_msg = "Query too short."
                 continue
             
-            if temp_query.lower() in executed_queries:
-                feedback_msg = f"Duplicate query: '{temp_query}'. Try a different entity or synonym."
-                # 增加重试时的随机性，帮助跳出局部最优
+            # 语义去重 (阈值 0.9)
+            if _is_semantically_similar(clean_q, executed_queries):
+                print(f"    [Loop Prevented] '{clean_q}' similar to history.")
+                feedback_msg = f"Loop Detected: You already searched '{clean_q}'. Try a different angle."
                 continue 
 
-            valid_next_query = temp_query
+            valid_next_query = clean_q
             break
 
-        # --- 执行 ---
         if should_stop_reasoning:
             break
             
         if not valid_next_query:
-            reasoning_chain.append(f"[Hop {step+1}] Failed to generate action. Stopping.")
+            reasoning_chain.append(f"[Hop {step+1}] Failed to generate valid query. Stopping.")
             break
 
         reasoning_chain.append(f"[Hop {step+1}] Thought: {thought}")
@@ -212,7 +288,7 @@ Action: <Search [Keywords] OR Answer>"""
                     "retrieval_method": "retrieve_from_elasticsearch",
                     "query_text": valid_next_query,
                     "rerank_query_text": valid_next_query,
-                    "max_hits_count": 5,  # 减少噪音，只看 Top 5
+                    "max_hits_count": 5, 
                     "max_buffer_count": 20,
                     "corpus_name": corpus_name,
                     "document_type": "title_paragraph_text",
@@ -224,74 +300,85 @@ Action: <Search [Keywords] OR Answer>"""
             reasoning_chain.append(f"[Error] Retrieve: {e}")
             hits = []
 
-        # 处理结果
         new_snippets = []
         for h in hits:
-            title = h.get('title', '')
-            paragraph_text = h.get('paragraph_text', '')
-            if not title or not paragraph_text:
-                continue
-            key = f"{title} {paragraph_text[:20]}"
+            key = f"{h.get('title')} {h.get('paragraph_text')[:20]}"
             if key not in all_retrieved_docs:
                 all_retrieved_docs[key] = h
-                # 摘要：Title + Content
-                content_preview = paragraph_text[:200] if len(paragraph_text) > 200 else paragraph_text
-                new_snippets.append(f"Title: {title}\nContent: {content_preview}...")
+                new_snippets.append(f"Title: {h['title']}\nContent: {h['paragraph_text'][:200]}...")
 
         reasoning_chain.append(f"[Hop {step+1}] Found {len(hits)} hits.")
 
         if new_snippets:
-            # 更新 History: 这里的 History 必须简洁，告诉模型找到了什么实体
-            titles = [h.get('title', 'Unknown') for h in hits[:2] if h.get('title')]
-            history_log.append(f"Searched '{valid_next_query}' -> Found docs about: {', '.join(titles)}")
-            
-            # 更新 Context: 只给最近的一步，加上一步的关键信息
-            current_context_snippet = "\n---\n".join(new_snippets[:3]) # 只保留 Top 3 防止 Context 污染
+            titles = [h['title'] for h in hits[:2]]
+            history_log.append(f"Searched '{valid_next_query}' -> Found: {', '.join(titles)}")
+            current_context_snippet = "\n---\n".join(new_snippets[:3]) 
         else:
             history_log.append(f"Searched '{valid_next_query}' -> No results.")
-            current_context_snippet = "No relevant documents found for the last query."
+            current_context_snippet = "No relevant documents found. Try different keywords."
 
     # ==============================================================================
     # Stage 2: 生成答案
     # ==============================================================================
     final_docs = list(all_retrieved_docs.values())
+    
     if not final_docs:
         return {'answer': "I don't know", 'chain': "\n".join(reasoning_chain), 'contexts': []}
 
-    # 简单截取 Top 20 (因为之前每步只取了 Top 5，这里的 docs 质量较高)
     if len(final_docs) > MAX_CONTEXT_DOCS:
-        selected_docs = final_docs[:10] + final_docs[-10:] # 头尾结合
+        selected_docs = final_docs[:15] + final_docs[-15:]
     else:
         selected_docs = final_docs
 
-    context_str = "\n\n".join([
-        f"[{i+1}] {d.get('title', 'Unknown')}: {d.get('paragraph_text', '')}"
-        for i, d in enumerate(selected_docs)
-        if d.get('title') and d.get('paragraph_text')
-    ])
+    context_str = "\n\n".join([f"[{i+1}] {d['title']}: {d['paragraph_text']}" for i, d in enumerate(selected_docs)])
+    
+    clean_history = [line for line in reasoning_chain if "Thought:" in line or "Action:" in line or "Found" in line]
+    investigation_log = "\n".join(clean_history)
 
-    final_prompt = f"""Based on the documents below, answer the question.
-If the answer is not present, say "I don't know".
-Be very concise (entity name, date, or place).
+    final_prompt = f"""Task: Answer the complex question based on the Investigation Log and Retrieved Documents.
 
-Documents:
+*** INVESTIGATION LOG ***
+{investigation_log}
+
+*** RETRIEVED DOCUMENTS ***
 {context_str}
 
-Question: {query}
-Answer:"""
+*** INSTRUCTIONS ***
+1. Synthesize the information found in the Log and Documents.
+2. Think step-by-step.
+3. Provide a concise answer.
+
+*** QUESTION ***
+{query}
+
+*** FORMAT ***
+Thought: <analysis>
+Answer: <concise answer>
+"""
 
     try:
         resp = requests.get(
             llm_url,
-            params={'prompt': final_prompt, 'max_length': 50, 'temperature': 0.1},
-            timeout=30
+            params={'prompt': final_prompt, 'max_length': 300, 'temperature': 0.1},
+            timeout=40
         )
-        ans = _extract_llm_text(resp.json()).split('\n')[0].strip()
-    except:
-        ans = "Error"
+        llm_output = _extract_llm_text(resp.json())
+        
+        reasoning_chain.append(f"[Final Generation] Raw: {llm_output[:100]}...")
+
+        ans_match = re.search(r'Answer:\s*(.*)', llm_output, re.DOTALL | re.IGNORECASE)
+        if ans_match:
+            final_answer = ans_match.group(1).strip().split('\n')[0].strip()
+        else:
+            lines = [l for l in llm_output.split('\n') if l.strip()]
+            final_answer = lines[-1] if lines else "I don't know"
+            
+    except Exception as e:
+        reasoning_chain.append(f"[Final Error] {e}")
+        final_answer = "Error"
 
     return {
-        'answer': ans,
+        'answer': final_answer,
         'chain': "\n".join(reasoning_chain),
         'contexts': selected_docs
     }
