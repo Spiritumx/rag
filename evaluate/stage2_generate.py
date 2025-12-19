@@ -234,7 +234,9 @@ class Stage2Generator:
             chains_path = output_path.replace('.json', '_chains.txt')
             with open(chains_path, 'w', encoding='utf-8') as f:
                 for qid in sorted(all_chains.keys()):
+                    f.write(f"QID: {qid}\n")  # 添加 QID 标识
                     f.write(all_chains[qid] + '\n')
+                    f.write('\n')  # 添加空行分隔符
             print(f"  Chains saved to: {chains_path}")
 
         if all_contexts:

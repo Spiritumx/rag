@@ -42,18 +42,43 @@ class AdvancedIRCoTAnalyzer:
         if chains_path:
             print(f"  📄 找到 Chains 文件: {os.path.basename(chains_path)}")
             with open(chains_path, 'r', encoding='utf-8') as f:
-                # 过滤空行，按 Q/A 块读取
                 content = f.read().strip()
-                # 简单的按 Q: 分割，处理可能的多行格式
-                raw_chains = content.split('\nQ: ')
-                # 补回被切掉的 Q:，除了第一个
-                self.chains = []
-                for i, c in enumerate(raw_chains):
-                    txt = c.strip()
-                    if not txt: continue
-                    if i > 0: txt = "Q: " + txt
-                    elif not txt.startswith("Q:"): txt = "Q: " + txt
-                    self.chains.append(txt)
+
+                # 检测格式：IRCoT (Q:/A:) 还是 M策略 ([Hop N])
+                if '[Hop' in content[:500] or 'QID:' in content[:500]:
+                    # M策略格式：每个 chain 以 QID: 开头，用空行分隔
+                    print(f"  🔍 检测到 M 策略格式 ([Hop N])")
+
+                    # 按 QID: 分割
+                    if 'QID:' in content:
+                        raw_chains = re.split(r'\n(?=QID:)', content)
+                        self.chains = []
+                        for c in raw_chains:
+                            txt = c.strip()
+                            if not txt or txt == 'QID:':
+                                continue
+                            # 移除 QID: 行，只保留推理内容
+                            lines = txt.split('\n')
+                            if lines and lines[0].startswith('QID:'):
+                                txt = '\n'.join(lines[1:]).strip()
+                            if txt:
+                                self.chains.append(txt)
+                    else:
+                        # 旧格式：按空行分隔（不推荐，可能不准确）
+                        raw_chains = content.split('\n\n')
+                        self.chains = [c.strip() for c in raw_chains if c.strip()]
+                else:
+                    # IRCoT 格式：按 Q: 分割
+                    print(f"  🔍 检测到 IRCoT 格式 (Q:/A:)")
+                    raw_chains = content.split('\nQ: ')
+                    # 补回被切掉的 Q:，除了第一个
+                    self.chains = []
+                    for i, c in enumerate(raw_chains):
+                        txt = c.strip()
+                        if not txt: continue
+                        if i > 0: txt = "Q: " + txt
+                        elif not txt.startswith("Q:"): txt = "Q: " + txt
+                        self.chains.append(txt)
             print(f"  ✓ Chains: {len(self.chains)} 条")
         else:
             print(f"  ❌ 找不到 Chains 文件")
@@ -91,36 +116,60 @@ class AdvancedIRCoTAnalyzer:
     def parse_chain_and_diagnose(self, chain_text: str, index: int) -> Dict:
         """解析并诊断单条推理链"""
         lines = chain_text.strip().split('\n')
-        question = lines[0].replace('Q: ', '').strip()
-        
-        # 尝试从文本中提取 QID (如果文件里没存 QID，尝试通过 question 匹配 contexts)
-        # 这里假设 contexts 的 key 是 qid，我们需要一种方式关联。
-        # 如果无法关联 QID，只能做纯文本分析。
-        current_qid = None
-        current_context_text = ""
-        
-        # 尝试通过问题文本反向查找 QID (这是一个 hack，因为 chain.txt 通常不带 QID)
-        # 实际使用中，建议 chain 文件最好带上 QID
-        
-        sentences = []
-        full_reasoning = ""
-        
-        # 提取推理部分
-        for line in lines:
-            if line.startswith('A:'):
-                full_reasoning = line.replace('A:', '').strip()
-                # 移除分数后缀
-                full_reasoning = re.sub(r'\s*S:\s*[\-\d.]+\s*$', '', full_reasoning)
-                break
-        
-        if full_reasoning:
-            # 分句逻辑：简单的按句号分割，或者按思维链步骤分割
-            # 假设 IRCoT 的输出通常包含重复的前缀，我们需要去重
-            # IRCoT 的 A: 通常是累积的。这里我们假设 txt 里存的是最终状态
-            
-            # 简单的分句
-            raw_sents = re.split(r'(?<=[.!?])\s+', full_reasoning)
-            sentences = [s.strip() for s in raw_sents if s.strip()]
+
+        # 检测格式：M策略 ([Hop]) 或 IRCoT (Q:/A:)
+        is_m_strategy = any('[Hop' in line for line in lines[:5])
+
+        if is_m_strategy:
+            # M策略格式解析
+            question = "M策略推理链"  # M策略的chain不包含原始问题
+            thoughts = []
+            queries = []
+
+            for line in lines:
+                if 'Thought:' in line:
+                    thought = line.split('Thought:', 1)[1].strip()
+                    thoughts.append(thought)
+                elif 'Query:' in line:
+                    query = line.split('Query:', 1)[1].strip()
+                    queries.append(query)
+
+            # 使用 queries 作为推理步骤（这些是实际用于检索的查询）
+            sentences = queries if queries else thoughts
+            full_reasoning = '\n'.join(lines)
+
+            # 提取最终答案（如果有）
+            predicted_answer = None
+            for line in reversed(lines):
+                if 'answer' in line.lower():
+                    predicted_answer = line.strip()
+                    break
+
+        else:
+            # IRCoT 格式解析
+            question = lines[0].replace('Q: ', '').strip()
+
+            sentences = []
+            full_reasoning = ""
+
+            # 提取推理部分
+            for line in lines:
+                if line.startswith('A:'):
+                    full_reasoning = line.replace('A:', '').strip()
+                    # 移除分数后缀
+                    full_reasoning = re.sub(r'\s*S:\s*[\-\d.]+\s*$', '', full_reasoning)
+                    break
+
+            if full_reasoning:
+                # 简单的分句
+                raw_sents = re.split(r'(?<=[.!?])\s+', full_reasoning)
+                sentences = [s.strip() for s in raw_sents if s.strip()]
+
+            # 提取答案
+            predicted_answer = None
+            match = re.search(r'(?:So|Thus|Therefore).*answer is:?\s*(.+?)(?:\.|$)', full_reasoning, re.IGNORECASE)
+            if match:
+                predicted_answer = match.group(1).strip()
 
         # === 诊断 1: 死循环检测 ===
         has_loop = False
@@ -134,13 +183,7 @@ class AdvancedIRCoTAnalyzer:
                         break
                 if has_loop: break
 
-        # === 诊断 2: 提取答案 ===
-        predicted_answer = None
-        match = re.search(r'(?:So|Thus|Therefore).*answer is:?\s*(.+?)(?:\.|$)', full_reasoning, re.IGNORECASE)
-        if match:
-            predicted_answer = match.group(1).strip()
-
-        # === 诊断 3: 幻觉检测 (需要 Context) ===
+        # === 诊断 2: 幻觉检测 (需要 Context) ===
         is_hallucination = False
         context_coverage = "UNKNOWN"
         
