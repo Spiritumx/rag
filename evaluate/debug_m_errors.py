@@ -533,14 +533,19 @@ def find_error_cases(dataset_name: str, num_cases: int = 2) -> List[Dict]:
     with open(predictions_file, 'r', encoding='utf-8') as f:
         predictions = json.load(f)
 
-    # 加载分类结果
-    classifications_file = f"evaluate/outputs/stage1_classifications/{dataset_name}_classifications.json"
+    # 加载分类结果（JSONL格式）
+    classifications_file = f"evaluate/outputs/stage1_classifications/{dataset_name}_classifications.jsonl"
     if not os.path.exists(classifications_file):
         print(f"✗ Classifications file not found: {classifications_file}")
         return []
 
+    # 🔧 修复：正确读取JSONL格式（参考stage2_generate.py和result_manager.py）
+    classifications = {}
     with open(classifications_file, 'r', encoding='utf-8') as f:
-        classifications = json.load(f)
+        for line in f:
+            if line.strip():
+                item = json.loads(line)
+                classifications[item['question_id']] = item
 
     # 加载测试数据
     test_file = f"processed_data/{dataset_name}/test_subsampled.jsonl"
