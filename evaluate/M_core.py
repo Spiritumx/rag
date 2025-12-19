@@ -136,7 +136,7 @@ Plan:"""
         resp = requests.get(
             llm_url,
             params={'prompt': prompt, 'max_length': 64, 'temperature': 0.1},
-            timeout=20
+            timeout=60  # 增加超时到60秒
         )
         plan = _extract_llm_text(resp.json()).split('\n')[0].strip()
         print(f"  [Logic] Plan: {plan}")
@@ -281,8 +281,8 @@ Action: <Search [Keywords] OR Answer>"""
             try:
                 resp = requests.get(
                     llm_url,
-                    params={'prompt': final_prompt, 'max_length': 128, 'temperature': 0.1}, 
-                    timeout=30
+                    params={'prompt': final_prompt, 'max_length': 128, 'temperature': 0.1},
+                    timeout=60  # 增加超时到60秒
                 )
                 raw_output = _extract_llm_text(resp.json())
                 
@@ -441,7 +441,7 @@ Answer: <concise answer>
         resp = requests.get(
             llm_url,
             params={'prompt': final_prompt, 'max_length': 300, 'temperature': 0.1},
-            timeout=40
+            timeout=90  # 增加超时到90秒（最终生成需要更长时间）
         )
         llm_output = _extract_llm_text(resp.json())
         reasoning_chain.append(f"[Final Generation] Raw: {llm_output[:100]}...")
