@@ -4,6 +4,7 @@ import traceback
 from typing import List, Dict, Any, Set
 
 def _extract_llm_text(response_json: Dict[str, Any]) -> str:
+    """辅助函数：适配多种 LLM API 的响应格式"""
     text = ""
     if 'generated_texts' in response_json:
         texts = response_json['generated_texts']
@@ -20,19 +21,19 @@ def _extract_llm_text(response_json: Dict[str, Any]) -> str:
 
 def _remove_conversational_phrases(query: str) -> str:
     """
-    清洗对话式废话（如 "I need to find"），保留长实体和关键词。
+    [强力清洗] 移除对话式废话，保留长实体。
     """
     original_query = query
     query = query.strip().strip('"\'[]').lower()
     
-    # 定义垃圾短语 (LLM 喜欢说的废话)
+    # 垃圾短语黑名单
     stop_phrases = [
         "i need to find", "i need to identify", "we need to", "try to find",
         "search for", "looking for", "find out", "figure out",
         "tell me", "what is", "who is", "where is", "when was",
         "the name of", "information about", "details regarding",
         "associated with", "related to", "step 1", "next step",
-        "first step", "bridge entity"
+        "first step", "bridge entity", "logical step"
     ]
     
     for phrase in stop_phrases:
@@ -42,16 +43,58 @@ def _remove_conversational_phrases(query: str) -> str:
     # 移除多余空格
     query = " ".join(query.split())
     
-    # 如果清洗后变空了（说明全是废话），或者清洗出了问题，回退到原始 query（小写化）
-    if len(query) < 1:
-        return original_query.strip().lower()
+    # 如果清洗后变太短，回退到原始 query (防止误删实体)
+    if len(query) < 2:
+        return original_query.strip().lower()  # 🔧 修复：保持小写一致性
 
     return query
 
+def _truncate_at_action(text: str) -> str:
+    """
+    [物理截断] 防止 LLM 自行生成多跳幻觉。
+    """
+    lines = text.split('\n')
+    truncated_lines = []
+    found_action = False
+    
+    for line in lines:
+        truncated_lines.append(line)
+        if "Action:" in line:
+            found_action = True
+            break 
+            
+    if found_action:
+        return "\n".join(truncated_lines)
+    return text
+
+def _verify_answer_evidence(thought: str, context_docs: List[Dict]) -> bool:
+    """
+    [宽松证据校验] 
+    1. 如果没有文档，拦截。
+    2. 如果模型承认没找到，拦截。
+    3. 否则放行（信任模型的语义理解）。
+    """
+    if not context_docs:
+        return False
+        
+    negative_signals = [
+        "not found", "no information", "didn't find", "unable to find", 
+        "doesn't mention", "no mention", "unknown", "can't answer",
+        "i don't know"
+    ]
+    thought_lower = thought.lower()
+    
+    # 检查是否包含否定词
+    for neg in negative_signals:
+        if neg in thought_lower:
+            # 简单检查是否有转折 (but found...)，如果没有转折，则视为失败
+            if "but" not in thought_lower and "however" not in thought_lower:
+                return False
+
+    return True
+
 def _is_semantically_similar(new_query: str, history_queries: Set[str], threshold: float = 0.9) -> bool:
-    """
-    语义去重 (Jaccard)。阈值设为 0.9，避免误伤长实体的细微差别。
-    """
+    """语义去重 (Jaccard)"""
     new_tokens = set(new_query.lower().split())
     if not new_tokens: return False
     
@@ -61,11 +104,46 @@ def _is_semantically_similar(new_query: str, history_queries: Set[str], threshol
         
         intersection = new_tokens.intersection(old_tokens)
         union = new_tokens.union(old_tokens)
-        similarity = len(intersection) / len(union)
+        if len(union) == 0: continue
         
-        if similarity >= threshold:
+        if len(intersection) / len(union) >= threshold:
             return True
     return False
+
+def _generate_logical_plan(query: str, llm_url: str) -> str:
+    """
+    [Stage 0] 逻辑拆解模块
+    将自然语言转化为逻辑表达式，指导后续搜索。
+    """
+    prompt = f"""Task: Convert the complex question into a Logical Path.
+Use the format: Entity(Attribute) -> [Target]
+
+*** EXAMPLES ***
+Q: "What is the acronym of the parent organization of Danish Football Union?"
+Plan: Parent_Org(Danish Football Union) -> [Org], Acronym([Org]) -> [Answer]
+
+Q: "Who is the director of the film Titanic born in?"
+Plan: Director(Film: Titanic) -> [Person], Birthplace([Person]) -> [Answer]
+
+Q: "What is the capital of the country where A was born?"
+Plan: Birthplace(A) -> [Country], Capital([Country]) -> [Answer]
+
+*** YOUR TURN ***
+Q: "{query}"
+Plan:"""
+
+    try:
+        resp = requests.get(
+            llm_url,
+            params={'prompt': prompt, 'max_length': 64, 'temperature': 0.1},
+            timeout=20
+        )
+        plan = _extract_llm_text(resp.json()).split('\n')[0].strip()
+        print(f"  [Logic] Plan: {plan}")
+        return plan
+    except Exception as e:  # 🔧 修复：只捕获 Exception，不捕获系统异常
+        print(f"  [Logic] Failed to generate plan: {e}")
+        return "Decompose the question step by step."
 
 def execute_real_multihop(
     query: str,
@@ -74,12 +152,7 @@ def execute_real_multihop(
     dataset_name: str
 ) -> dict:
     """
-    Expert Agentic RAG (Warm-Start Version)
-    
-    Updates:
-    1. Step 0: Initial Retrieval using the original query.
-    2. Relaxed Cleaning: No longer truncates long queries, just removes chatty phrases.
-    3. Context Injection: Keeps the logic of feeding investigation logs to final generation.
+    Expert Agentic RAG (Logic-Guided Version)
     """
     
     # === 配置 ===
@@ -88,11 +161,8 @@ def execute_real_multihop(
     MAX_CONTEXT_DOCS = 40
     
     dataset_to_corpus = {
-        'hotpotqa': 'hotpotqa',
-        'musique': 'musique',
-        '2wikimultihopqa': '2wikimultihopqa',
-        'iirc': 'iirc',
-        'wiki': 'wiki'
+        'hotpotqa': 'hotpotqa', 'musique': 'musique',
+        '2wikimultihopqa': '2wikimultihopqa', 'iirc': 'iirc', 'wiki': 'wiki'
     }
     corpus_name = dataset_to_corpus.get(dataset_name.lower(), 'wiki')
     
@@ -108,17 +178,23 @@ def execute_real_multihop(
     print(f"  [Agent] Start: {query[:60]}... (Corpus: {corpus_name})")
 
     # ==============================================================================
-    # Step 0: 初始检索 (Warm Start)
+    # Stage 0: 逻辑规划 & 初始检索
     # ==============================================================================
-    print("  [Agent] Step 0: Initial Retrieval with original query...")
+    
+    # 0.a 生成逻辑规划 (Query Rewriting / Decomposition)
+    logical_plan = _generate_logical_plan(query, llm_url)
+    reasoning_chain.append(f"[Step 0] Logical Plan: {logical_plan}")
+
+    # 0.b Warm Start (Initial Retrieval)
+    print("  [Agent] Step 0: Initial Retrieval...")
     try:
         r_resp = requests.post(
             retriever_url,
             json={
                 "retrieval_method": "retrieve_from_elasticsearch",
-                "query_text": query,  # 直接用原始问题搜
+                "query_text": query,
                 "rerank_query_text": query,
-                "max_hits_count": 8,  # 初始检索多拿一点，建立背景
+                "max_hits_count": 8,
                 "max_buffer_count": 40,
                 "corpus_name": corpus_name,
                 "document_type": "title_paragraph_text",
@@ -126,8 +202,6 @@ def execute_real_multihop(
             }, timeout=30
         )
         hits = r_resp.json().get('retrieval', [])
-        
-        # 处理结果
         init_snippets = []
         for h in hits:
             key = f"{h.get('title')} {h.get('paragraph_text')[:20]}"
@@ -138,16 +212,13 @@ def execute_real_multihop(
         if init_snippets:
             current_context_snippet = "\n---\n".join(init_snippets[:3])
             titles = [h['title'] for h in hits[:3]]
-            # 写入历史
             history_log.append(f"Initial Search '{query}' -> Found docs: {', '.join(titles)}")
-            executed_queries.add(query.lower()) # 标记原问题已搜过（小写）
-            executed_queries.add(_remove_conversational_phrases(query.lower()))
+            executed_queries.add(query.lower())
+            executed_queries.add(_remove_conversational_phrases(query))  # 🔧 修复：函数重命名
         else:
             current_context_snippet = "Initial search returned no direct results."
             history_log.append(f"Initial Search '{query}' -> No direct results.")
-            
         reasoning_chain.append(f"[Step 0] Initial Search Found {len(hits)} hits.")
-        
     except Exception as e:
         print(f"  [Agent] Initial search failed: {e}")
         current_context_snippet = "Initial search failed."
@@ -169,29 +240,27 @@ def execute_real_multihop(
         for attempt in range(MAX_RETRIES):
             history_str = "\n".join([f"Hop {i+1}: {h}" for i, h in enumerate(history_log)]) if history_log else "None"
             
-            # Prompt 微调：强调基于 Current Info (Step 0 的结果) 进行分解
-            base_prompt = f"""You are an expert research agent. Break down the question into KEYWORD SEARCHES.
+            # Prompt 核心：注入逻辑规划 (Logical Strategy)
+            base_prompt = f"""You are an expert research agent. 
+Follow the LOGICAL STRATEGY to find the answer step-by-step.
+
+*** LOGICAL STRATEGY ***
+{logical_plan}
 
 *** RULES ***
-1. Check "Current Info" first. If it helps, move to the next logical entity.
+1. Execute the next step in the Logical Strategy.
 2. DO NOT repeat "Past Actions".
-3. OUTPUT ONLY KEYWORDS (Entities, Names, Places).
+3. OUTPUT ONLY KEYWORDS (e.g., "Director Titanic", not "Who is the director").
+4. If you have the final answer in "Current Info", "Action: Answer".
 
 *** EXAMPLE ***
 Question: "Who is the director of the film Titanic?"
+Plan: Director(Titanic) -> [Person]
 Hop 1:
-Thought: Initial search found Titanic movie info. I need the director's name specifically.
+Thought: I need to find the director of Titanic as per the plan.
 Action: Search [Titanic film director]
-Result: Found James Cameron.
-Hop 2:
-Thought: Now I need to find James Cameron's birth country.
-Action: Search [James Cameron birth place]
-Result: Found Kapuskasing, Ontario, Canada.
-Hop 3:
-Thought: I have the answer.
-Action: Answer
 
-*** YOUR TASK ***
+*** YOUR TURN ***
 Question: {query}
 
 Past Actions:
@@ -215,7 +284,11 @@ Action: <Search [Keywords] OR Answer>"""
                     params={'prompt': final_prompt, 'max_length': 128, 'temperature': 0.1}, 
                     timeout=30
                 )
-                llm_output = _extract_llm_text(resp.json())
+                raw_output = _extract_llm_text(resp.json())
+                
+                # [Critical] 物理截断
+                llm_output = _truncate_at_action(raw_output)
+                
             except Exception as e:
                 reasoning_chain.append(f"[Error] LLM: {e}")
                 should_stop_reasoning = True
@@ -238,11 +311,18 @@ Action: <Search [Keywords] OR Answer>"""
 
             # Case A: Answer
             if "Answer" in action_raw and "Search" not in action_raw:
-                reasoning_chain.append(f"[Hop {step+1}] Thought: {thought}")
-                reasoning_chain.append(f"[Hop {step+1}] Action: Answer")
-                should_stop_reasoning = True
-                valid_next_query = None
-                break
+                # [Critical] 宽松证据校验
+                final_docs_check = list(all_retrieved_docs.values())
+                if _verify_answer_evidence(thought, final_docs_check):
+                    reasoning_chain.append(f"[Hop {step+1}] Thought: {thought}")
+                    reasoning_chain.append(f"[Hop {step+1}] Action: Answer")
+                    should_stop_reasoning = True
+                    valid_next_query = None
+                    break
+                else:
+                    print(f"    [Evidence Check Failed] Agent was unsure or had no docs.")
+                    feedback_msg = "You are trying to Answer, but you haven't gathered enough information (or said 'not found'). Please SEARCH for the missing entity."
+                    continue
 
             # Case B: Search
             search_match = re.search(r'Search\s*\[?(.*?)\]?$', action_raw, re.IGNORECASE)
@@ -254,16 +334,15 @@ Action: <Search [Keywords] OR Answer>"""
                 feedback_msg = "Format Error."
                 continue
             
-            # 清洗对话式废话，保留长实体
-            clean_q = _remove_conversational_phrases(raw_q)
+            # 强力清洗
+            clean_q = _remove_conversational_phrases(raw_q)  # 🔧 修复：函数重命名
             
             if len(clean_q) < 2:
                 feedback_msg = "Query too short."
                 continue
             
-            # 语义去重 (阈值 0.9)
+            # 语义去重
             if _is_semantically_similar(clean_q, executed_queries):
-                print(f"    [Loop Prevented] '{clean_q}' similar to history.")
                 feedback_msg = f"Loop Detected: You already searched '{clean_q}'. Try a different angle."
                 continue 
 
@@ -279,8 +358,9 @@ Action: <Search [Keywords] OR Answer>"""
 
         reasoning_chain.append(f"[Hop {step+1}] Thought: {thought}")
         reasoning_chain.append(f"[Hop {step+1}] Action: Search [{valid_next_query}]")
-        executed_queries.add(valid_next_query.lower())
+        executed_queries.add(valid_next_query.lower())  # 🔧 修复：显式转小写确保一致性
 
+        # Search
         try:
             r_resp = requests.post(
                 retriever_url,
@@ -318,10 +398,9 @@ Action: <Search [Keywords] OR Answer>"""
             current_context_snippet = "No relevant documents found. Try different keywords."
 
     # ==============================================================================
-    # Stage 2: 生成答案
+    # Stage 2: Final Generation (Injection + CoT + Logic Plan)
     # ==============================================================================
     final_docs = list(all_retrieved_docs.values())
-    
     if not final_docs:
         return {'answer': "I don't know", 'chain': "\n".join(reasoning_chain), 'contexts': []}
 
@@ -337,6 +416,9 @@ Action: <Search [Keywords] OR Answer>"""
 
     final_prompt = f"""Task: Answer the complex question based on the Investigation Log and Retrieved Documents.
 
+*** LOGICAL BLUEPRINT ***
+{logical_plan}
+
 *** INVESTIGATION LOG ***
 {investigation_log}
 
@@ -344,9 +426,8 @@ Action: <Search [Keywords] OR Answer>"""
 {context_str}
 
 *** INSTRUCTIONS ***
-1. Synthesize the information found in the Log and Documents.
-2. Think step-by-step.
-3. Provide a concise answer.
+1. Follow the Logical Blueprint to synthesize the answer.
+2. Provide a concise answer (Entity, Date, or Name only).
 
 *** QUESTION ***
 {query}
@@ -363,7 +444,6 @@ Answer: <concise answer>
             timeout=40
         )
         llm_output = _extract_llm_text(resp.json())
-        
         reasoning_chain.append(f"[Final Generation] Raw: {llm_output[:100]}...")
 
         ans_match = re.search(r'Answer:\s*(.*)', llm_output, re.DOTALL | re.IGNORECASE)
@@ -372,7 +452,6 @@ Answer: <concise answer>
         else:
             lines = [l for l in llm_output.split('\n') if l.strip()]
             final_answer = lines[-1] if lines else "I don't know"
-            
     except Exception as e:
         reasoning_chain.append(f"[Final Error] {e}")
         final_answer = "Error"
