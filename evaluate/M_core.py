@@ -1,6 +1,7 @@
 import requests
+import re
 import traceback
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Set
 
 def _extract_llm_text(response_json: Dict[str, Any]) -> str:
     """辅助函数：适配多种 LLM API 的响应格式"""
@@ -18,6 +19,11 @@ def _extract_llm_text(response_json: Dict[str, Any]) -> str:
             text = choices[0].get('text', '') or choices[0].get('message', {}).get('content', '')
     return text.strip()
 
+def _clean_query(query: str) -> str:
+    """清理查询语句，移除多余的标点和指令词"""
+    query = re.sub(r'^(search for|search|find|query):?\s*', '', query, flags=re.IGNORECASE)
+    return query.strip().strip('"').strip("'")
+
 def execute_real_multihop(
     query: str,
     retriever_config: dict,
@@ -25,27 +31,20 @@ def execute_real_multihop(
     dataset_name: str
 ) -> dict:
     """
-    高级 Agentic RAG：包含"检查-重写-检索"闭环逻辑
-    解决 Fester Hollow 问题的核心：如果第一步没搜到，第二步会重写查询去专门搜它。
-
-    Args:
-        query: 用户问题
-        retriever_config: Retriever 配置 (host, port)
-        llm_config: LLM 配置 (host, port)
-        dataset_name: 数据集名称，用于确定 corpus_name
+    高级 Agentic RAG (Self-Correction + Deep Reasoning 版)
+    
+    特性:
+    1. MAX_HOPS = 8: 允许更深层的推理。
+    2. Self-Correction: 遇到重复查询时，在单步内进行 Prompt 修正重试，而不是直接失败。
+    3. Optimized Context: 最终生成时采用 Head+Mid+Tail 采样策略，防止长窗口下的上下文丢失。
     """
     
-    # 状态维护
-    context_text = ""
-    seen_ids = set()
-    final_docs = []
-    reasoning_steps = []
-
-    # 参数
-    MAX_HOPS = 4  # 通常 2-3 跳足够，给多一次容错
-    MAX_CONTEXT_DOCS = 40
-
-    # 根据数据集名称确定 corpus_name（对应 ES 索引名）
+    # === 核心配置参数 ===
+    MAX_HOPS = 8           # 增加推理深度，允许更多次跳转
+    MAX_RETRIES = 3        # 单步内遇到死循环时的最大修正次数
+    MAX_CONTEXT_DOCS = 40  # 最终生成答案时提供给 LLM 的最大文档数
+    
+    # 确定 Corpus (Elasticsearch Index)
     dataset_to_corpus = {
         'hotpotqa': 'hotpotqa',
         'musique': 'musique',
@@ -53,204 +52,248 @@ def execute_real_multihop(
         'iirc': 'iirc',
         'wiki': 'wiki'
     }
+    corpus_name = dataset_to_corpus.get(dataset_name.lower(), 'wiki')
+    
+    # API 地址（处理可能已包含协议前缀的情况）
+    retriever_host = retriever_config['host']
+    if not retriever_host.startswith('http'):
+        retriever_host = f"http://{retriever_host}"
+    retriever_url = f"{retriever_host}:{retriever_config['port']}/retrieve/"
 
-    # 使用 wiki 作为默认索引（适用于未知数据集）
-    dataset_lower = dataset_name.lower()
-    if dataset_lower in dataset_to_corpus:
-        corpus_name = dataset_to_corpus[dataset_lower]
-    else:
-        corpus_name = 'wiki'
-        print(f"  [Agent] Warning: Unknown dataset '{dataset_name}', using default 'wiki' corpus")
+    llm_host = llm_config['host']
+    if not llm_host.startswith('http'):
+        llm_host = f"http://{llm_host}"
+    llm_url = f"{llm_host}:{llm_config['port']}/generate"
 
-    retriever_url = f"http://{retriever_config['host']}:{retriever_config['port']}/retrieve/"
-    llm_url = f"http://{llm_config['host']}:{llm_config['port']}/generate"
+    # === 状态维护 ===
+    # 存储所有检索到的文档，Key为 title+text 摘要，Value为完整文档对象
+    all_retrieved_docs: Dict[str, Dict] = {} 
+    # 历史动作日志，用于 Prompt
+    history_log: List[str] = []
+    # 已执行过的查询集合 (归一化后)，用于检测死循环
+    executed_queries: Set[str] = set()
+    # 推理链日志，用于最终输出
+    reasoning_chain: List[str] = []
 
-    print(f"  [Agent] Corpus: {corpus_name} | Starting reasoning for: {query[:50]}...")
+    print(f"  [Agent] Start: {query[:60]}... (Corpus: {corpus_name}, Max Hops: {MAX_HOPS})")
 
+    current_context_snippet = "No information gathered yet."
+    should_stop_reasoning = False
+
+    # ==============================================================================
+    # Stage 1: 多跳推理循环
+    # ==============================================================================
     for step in range(MAX_HOPS):
-        # ==============================================================================
-        # Step A: 自适应规划 (Adaptive Planning with Reflection)
-        # ==============================================================================
-        # 这个 Prompt 是核心：教模型判断当前 Context 是否足够，以及缺失什么
-        
-        prompt_content = f"""Task: You are a multi-hop QA agent. Analyze the Request and the Known Information. Determine the Next Search Query.
-
-Strategy:
-1. **Check**: Look at the Known Information. Did we find the entities mentioned in the Request?
-2. **Reformulate**: 
-   - If a key entity (e.g., "Fester Hollow") is MISSING from Known Information, search specifically for it (e.g., "location of Fester Hollow").
-   - If the entity IS FOUND, use that info to jump to the next hop (e.g., "mountains near Portland Pennsylvania").
-   - If you have the final answer, output "DONE".
-
-Example 1 (Success Path):
-Request: Who is the CEO of the company that acquired WhatsApp?
-Known: WhatsApp was acquired by Facebook in 2014.
-Thought: I found the acquiring company (Facebook). Now I need its CEO.
-Next Search Query: CEO of Facebook
-
-Example 2 (Recovery Path - The "Fester Hollow" Logic):
-Request: What mountains are in the state containing Fester Hollow?
-Known: [Docs about "Uncle Fester", "Sleepy Hollow"... nothing about the place "Fester Hollow"]
-Thought: I have not found the location of "Fester Hollow" yet. The current docs are irrelevant. I need to find where Fester Hollow is first.
-Next Search Query: location of Fester Hollow Pennsylvania
-
-Example 3 (Complex):
-Request: When was the author of Harry Potter born?
-Known: None.
-Thought: I need to find the author of Harry Potter first.
-Next Search Query: author of Harry Potter
-
-Current Task:
-Request: {query}
-Known: {context_text if context_text else "No relevant documents found yet."}
-
-Instructions:
-- Output your 'Thought' first, then the 'Next Search Query'.
-- Keep the query specific and keyword-rich.
-"""
-
-        # 调用 LLM
-        try:
-            response = requests.get(
-                llm_url,
-                params={'prompt': prompt_content, 'max_length': 100, 'temperature': 0.1, 'do_sample': False},
-                timeout=60
-            )
-            llm_output = _extract_llm_text(response.json())
-        except Exception as e:
-            reasoning_steps.append(f"[Hop {step+1}] LLM Error: {e}")
+        if should_stop_reasoning:
             break
 
-        # 解析 Output (格式：Thought: ... Next Search Query: ...)
+        # --- 内部循环：规划与自我修正 (Planning with Self-Correction) ---
+        feedback_msg = ""     # 用于存储给 LLM 的纠错反馈
+        valid_next_query = None
+        action_raw = ""
         thought = ""
-        next_query = ""
         
-        # 简单的解析逻辑
-        if "Next Search Query:" in llm_output:
-            parts = llm_output.split("Next Search Query:")
-            thought = parts[0].replace("Thought:", "").strip()
-            next_query = parts[1].strip()
-        else:
-            # Fallback: 如果模型没按格式输出，假设全是 query
-            next_query = llm_output.strip()
-
-        reasoning_steps.append(f"[Hop {step+1}] Thought: {thought}")
-        reasoning_steps.append(f"[Hop {step+1}] Query: {next_query}")
-
-        # ==============================================================================
-        # Step B: 终止检查
-        # ==============================================================================
-        if "DONE" in next_query or len(next_query) < 2:
-            reasoning_steps.append(f"[Hop {step+1}] Agent decided to stop.")
-            break
-
-        # ==============================================================================
-        # Step C: 检索 (Retrieval)
-        # ==============================================================================
-        try:
-            # 这里的关键：Query 已经由 LLM 重写过了，如果是"Fester Hollow location"，BM25 就能搜到了
-            response = requests.post(
-                retriever_url,
-                json={
-                    "retrieval_method": "retrieve_from_elasticsearch",
-                    "query_text": next_query,        # 使用重写后的 Query
-                    "rerank_query_text": next_query, # Rerank 也专注当前意图
-                    "max_hits_count": 10,
-                    "max_buffer_count": 60,
-                    "corpus_name": corpus_name,
-                    "document_type": "title_paragraph_text",
-                    "retrieval_backend": "hybrid"
-                }, timeout=30
-            )
-            hits = response.json().get('retrieval', [])
-        except Exception as e:
-            reasoning_steps.append(f"[Hop {step+1}] Retriever Error: {e}")
-            hits = []
-
-        reasoning_steps.append(f"[Hop {step+1}] Found {len(hits)} docs.")
-
-        # ==============================================================================
-        # Step D: 上下文累积 (Accumulation)
-        # ==============================================================================
-        new_docs_added = 0
-        current_step_snippets = []
-        
-        for h in hits:
-            doc_id = h.get('id', h.get('title'))
-            if doc_id not in seen_ids:
-                seen_ids.add(doc_id)
-                final_docs.append(h)
-                
-                # 构造用于下一次 Prompt 的摘要
-                # 截取前 200 字符，避免 Prompt 爆炸
-                snippet = f"Title: {h.get('title', '')} | Content: {h.get('paragraph_text', '')[:200]}..."
-                current_step_snippets.append(snippet)
-                new_docs_added += 1
-
-        # 更新 Context Text (给 LLM 看的)
-        if current_step_snippets:
-            context_text += f"\n\n--- Retrieved in Step {step+1} ---\n" + "\n".join(current_step_snippets)
-        
-        # 滚动窗口：保持 final_docs 不超过限制 (用于最后生成)
-        if len(final_docs) > MAX_CONTEXT_DOCS:
-            final_docs = final_docs[-MAX_CONTEXT_DOCS:]
-
-        # 如果这一步啥都没搜到，强制终止防止死循环
-        if new_docs_added == 0:
-            reasoning_steps.append(f"[Hop {step+1}] No new info found. Stopping.")
-            break
-
-    # ==============================================================================
-    # Step E: 最终生成 (Generation)
-    # ==============================================================================
-    # 全局 Rerank (可选，建议保留以提升 Top-10 质量)
-    if len(final_docs) > 10:
-        try:
-            # 用原始问题对所有积累的文档进行最后一次清洗
-            response = requests.post(
-                retriever_url,
-                json={
-                    "retrieval_method": "retrieve_from_elasticsearch",
-                    "query_text": query,
-                    "rerank_query_text": query,
-                    "max_hits_count": 10,
-                    "max_buffer_count": 60,
-                    "corpus_name": corpus_name,
-                    "document_type": "title_paragraph_text",
-                    "retrieval_backend": "hybrid"
-                }, timeout=30
-            )
-            # 这里不仅用检索结果，更重要的是利用 Reranker 对我们手头的 final_docs 进行重排
-            # 但如果你没有单独的 Rerank 接口，就用混合策略：
-            # 简单截取最后几轮的文档（因为它们通常包含最终答案）
-            final_docs = final_docs[-10:] 
-        except:
-            final_docs = final_docs[-10:]
-
-    docs_text = "\n\n".join([
-        f"[{i+1}] {d.get('title', '')}: {d.get('paragraph_text', '')[:500]}" 
-        for i, d in enumerate(final_docs)
-    ])
-
-    final_prompt = f"""Answer the question based on the documents.
-Documents:
-{docs_text}
+        for attempt in range(MAX_RETRIES):
+            # 构造历史记录字符串
+            history_str = "\n".join([f"Step {i+1}: {h}" for i, h in enumerate(history_log)]) if history_log else "None"
+            
+            # 基础 Prompt
+            base_prompt = f"""Task: You are a smart research assistant solving a complex question. 
+You have up to {MAX_HOPS} steps to gather information.
 
 Question: {query}
-Answer (concise):"""
+
+Past Actions & Results:
+{history_str}
+
+Current Knowledge Summary:
+{current_context_snippet}
+
+Instructions:
+1. Analyze the "Past Actions". DO NOT repeat the same search query.
+2. If you have enough information to answer the User Question, output "Action: Answer".
+3. If you need more information, output "Action: Search [Keywords]".
+4. Focus on finding bridge entities (e.g., if asked for "director of the film starring X", first search "film starring X", then "director of [Film Name]").
+
+Format:
+Thought: <your reasoning>
+Action: <Search [Query] OR Answer>"""
+
+            # 如果有反馈信息（说明上一次生成重复了），将其追加到 Prompt 末尾，加强语气
+            if feedback_msg:
+                final_prompt = base_prompt + f"\n\n*** PREVIOUS ATTEMPT FAILED ***\n{feedback_msg}\nPlease try a DIFFERENT angle or entity."
+            else:
+                final_prompt = base_prompt
+
+            try:
+                # 稍微调高 temperature (0.2)，在重试时增加一点随机性，有助于打破死循环
+                resp = requests.get(
+                    llm_url,
+                    params={'prompt': final_prompt, 'max_length': 160, 'temperature': 0.2}, 
+                    timeout=30
+                )
+                llm_output = _extract_llm_text(resp.json())
+            except Exception as e:
+                reasoning_chain.append(f"[Error] LLM Call Failed: {e}")
+                should_stop_reasoning = True
+                break
+
+            # 解析 LLM 输出
+            thought_match = re.search(r'Thought:(.*?)(Action:|$)', llm_output, re.DOTALL | re.IGNORECASE)
+            action_match = re.search(r'Action:(.*)', llm_output, re.DOTALL | re.IGNORECASE)
+
+            thought = thought_match.group(1).strip() if thought_match else "No thought"
+            action_raw = action_match.group(1).strip() if action_match else llm_output.strip()
+
+            # Case A: 决定回答
+            if "Answer" in action_raw and "Search" not in action_raw:
+                reasoning_chain.append(f"[Step {step+1}] Thought: {thought}")
+                reasoning_chain.append(f"[Step {step+1}] Agent decided to Answer.")
+                should_stop_reasoning = True
+                valid_next_query = None
+                break
+
+            # Case B: 决定搜索 -> 提取 Query
+            search_match = re.search(r'Search\s*\[?(.*?)\]?$', action_raw, re.IGNORECASE)
+            if search_match:
+                temp_query = search_match.group(1)
+            else:
+                temp_query = action_raw.replace("Search", "").strip()
+
+            temp_query = _clean_query(temp_query)
+
+            # 验证 Query 有效性
+            if not temp_query or len(temp_query) < 2:
+                feedback_msg = "Your previous action generated an empty query."
+                continue
+            
+            # 检测循环 (Loop Detection)
+            if temp_query.lower() in executed_queries:
+                print(f"    [Correction] Loop detected: '{temp_query}'. Asking LLM to rewrite... (Attempt {attempt+1}/{MAX_RETRIES})")
+                feedback_msg = f"ERROR: You just tried to search for '{temp_query}', but you have ALREADY searched for this in the past steps. You MUST generate a DIFFERENT query."
+                # 继续下一次 attempt 循环，不 break
+            else:
+                # 成功生成唯一 Query
+                valid_next_query = temp_query
+                break 
+
+        # 如果退出重试循环后，依然没有有效查询且没决定停止，说明重试多次失败
+        if not should_stop_reasoning and not valid_next_query:
+            reasoning_chain.append(f"[Step {step+1}] Failed to generate unique query after {MAX_RETRIES} attempts. Stopping.")
+            break
+
+        if should_stop_reasoning:
+            break
+
+        # --- 执行搜索 (Execution) ---
+        reasoning_chain.append(f"[Step {step+1}] Thought: {thought}")
+        reasoning_chain.append(f"[Step {step+1}] Action: Search [{valid_next_query}]")
+        
+        executed_queries.add(valid_next_query.lower())
+        
+        try:
+            r_resp = requests.post(
+                retriever_url,
+                json={
+                    "retrieval_method": "retrieve_from_elasticsearch",
+                    "query_text": valid_next_query,
+                    "rerank_query_text": valid_next_query,
+                    "max_hits_count": 8,  # 单步检索 8 条，防止文档库膨胀过快
+                    "max_buffer_count": 40,
+                    "corpus_name": corpus_name,
+                    "document_type": "title_paragraph_text",
+                    "retrieval_backend": "hybrid"
+                }, timeout=120
+            )
+            hits = r_resp.json().get('retrieval', [])
+        except Exception as e:
+            reasoning_chain.append(f"[Error] Retriever Failed: {e}")
+            hits = []
+
+        # 处理并去重文档
+        new_info_snippets = []
+        for h in hits:
+            doc_key = f"{h.get('title')} {h.get('paragraph_text')[:30]}"
+            if doc_key not in all_retrieved_docs:
+                all_retrieved_docs[doc_key] = h
+                snippet = f"{h.get('title')}: {h.get('paragraph_text')[:150]}..."
+                new_info_snippets.append(snippet)
+
+        reasoning_chain.append(f"[Step {step+1}] Found {len(hits)} hits, {len(new_info_snippets)} new.")
+
+        # 更新 Prompt 上下文
+        if new_info_snippets:
+            # 记录简单的历史摘要
+            top_titles = [h['title'] for h in hits[:2]]
+            history_log.append(f"Searched '{valid_next_query}' -> Found info on: {', '.join(top_titles)}")
+            # 更新 Current Knowledge Summary (给 LLM 看最近的发现)
+            current_context_snippet = "\n".join(new_info_snippets)
+        else:
+            history_log.append(f"Searched '{valid_next_query}' -> Found NOTHING. Try a different entity or keyword.")
+            current_context_snippet = "Last search returned no relevant results."
+
+    # ==============================================================================
+    # Stage 2: 最终答案生成 (Final Answer Generation)
+    # ==============================================================================
+    
+    final_docs = list(all_retrieved_docs.values())
+    if not final_docs:
+        return {
+            'answer': "I don't know",
+            'chain': "\n".join(reasoning_chain),
+            'contexts': []
+        }
+
+    # --- 优化文档选择策略 (Head + Mid + Tail) ---
+    # 目的：保留最早的背景信息(Head) 和 最新的直接答案信息(Tail)，并从中间采样防止断链
+    if len(final_docs) > MAX_CONTEXT_DOCS:
+        num_tail = 15   # 最近的 15 个（通常包含最终答案）
+        num_head = 10   # 最早的 10 个（通常包含主语定义）
+        num_mid = MAX_CONTEXT_DOCS - num_tail - num_head # 中间采样数 (15)
+        
+        mid_docs = final_docs[num_head:-num_tail]
+        
+        # 均匀采样中间部分
+        if len(mid_docs) > num_mid:
+            step_size = max(1, len(mid_docs) // num_mid)
+            selected_mid = [mid_docs[i] for i in range(0, len(mid_docs), step_size)][:num_mid]
+        else:
+            selected_mid = mid_docs
+            
+        selected_docs = final_docs[:num_head] + selected_mid + final_docs[-num_tail:]
+    else:
+        selected_docs = final_docs
+
+    # 构造最终 Prompt
+    context_text = "\n\n".join([
+        f"Document [{i+1}] {d.get('title', 'Unknown')}:\n{d.get('paragraph_text', '')}" 
+        for i, d in enumerate(selected_docs)
+    ])
+
+    final_prompt = f"""Use the following documents to answer the user's question. 
+If the documents do not contain the answer, say "I don't know".
+Keep the answer concise (e.g., entity name, date, location).
+
+Documents:
+{context_text}
+
+Question: {query}
+Answer:"""
 
     try:
-        response = requests.get(
+        resp = requests.get(
             llm_url,
-            params={'prompt': final_prompt, 'max_length': 50, 'temperature': 0.1, 'do_sample': False},
-            timeout=60
+            params={'prompt': final_prompt, 'max_length': 64, 'temperature': 0.1},
+            timeout=30
         )
-        answer = _extract_llm_text(response.json())
+        final_answer = _extract_llm_text(resp.json())
+        # 清理答案，只取第一行
+        final_answer = final_answer.split('\n')[0].strip()
     except:
-        answer = "I don't know"
+        final_answer = "Error generating answer"
 
     return {
-        'answer': answer,
-        'chain': "\n".join(reasoning_steps),
-        'contexts': final_docs
+        'answer': final_answer,
+        'chain': "\n".join(reasoning_chain),
+        'contexts': selected_docs
     }
