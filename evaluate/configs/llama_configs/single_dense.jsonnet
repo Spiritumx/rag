@@ -2,7 +2,7 @@
 # Action: S-Dense - Single retrieval round with dense vectors
 # Process: HNSW retrieves 20 docs → Reranker → Top-10
 
-local retrieval_corpus_name = 'wiki';
+local retrieval_corpus_name = std.extVar("CORPUS_NAME");  # Dynamic corpus based on dataset
 local retrieval_count = 10;  # Final top-K after reranking
 local max_buffer_count = 20;  # Number of docs to retrieve before reranking
 

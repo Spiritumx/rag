@@ -321,6 +321,17 @@ class Stage2Generator:
         tokenizer_path = self.config['llm'].get('model_path', '/root/autodl-tmp/model/Meta-Llama-3-8B-Instruct')
         env['TOKENIZER_MODEL_NAME'] = tokenizer_path
 
+        # Set corpus name based on dataset (for retrieval)
+        dataset_to_corpus = {
+            'hotpotqa': 'hotpotqa',
+            'musique': 'musique',
+            '2wikimultihopqa': '2wikimultihopqa',
+            'iirc': 'iirc',
+            'wiki': 'wiki'
+        }
+        corpus_name = dataset_to_corpus.get(dataset_name.lower(), 'wiki')
+        env['CORPUS_NAME'] = corpus_name
+
         # Service endpoints (add http:// prefix if not present)
         retriever_host = self.config['retriever']['host']
         if not retriever_host.startswith('http'):
