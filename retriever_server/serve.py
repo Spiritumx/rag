@@ -176,17 +176,24 @@ async def retrieve(request: Request):  # see the corresponding method in unified
         # Extract retrieval method
         if "retrieval_method" not in arguments:
             raise HTTPException(status_code=400, detail="Missing 'retrieval_method' in request")
-        
+
         retrieval_method = arguments.pop("retrieval_method")
         if retrieval_method not in ("retrieve_from_elasticsearch",):
             raise HTTPException(status_code=400, detail=f"Unknown retrieval_method: {retrieval_method}. Expected: retrieve_from_elasticsearch")
-        
+
+        # Log retrieval request details
+        corpus_name = arguments.get("corpus_name", "unknown")
+        query_text = arguments.get("query_text", "")
+        retrieval_backend = arguments.get("retrieval_backend", "unknown")
+        print(f"[Retriever] Corpus: {corpus_name} | Backend: {retrieval_backend} | Query: {query_text[:80]}...")
+
         # Execute retrieval
         try:
             start_time = perf_counter()
             retrieval = getattr(retriever, retrieval_method)(**arguments)
             end_time = perf_counter()
             time_in_seconds = round(end_time - start_time, 1)
+            print(f"[Retriever] Retrieved {len(retrieval)} docs in {time_in_seconds}s from {corpus_name}")
             return {"retrieval": retrieval, "time_in_seconds": time_in_seconds}
         except AttributeError as e:
             raise HTTPException(status_code=400, detail=f"Unknown retrieval method or retriever not initialized: {str(e)}")
