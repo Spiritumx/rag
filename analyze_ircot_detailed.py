@@ -125,8 +125,15 @@ class AdvancedIRCoTAnalyzer:
             question = "M策略推理链"  # M策略的chain不包含原始问题
             thoughts = []
             queries = []
+            hop_numbers = []
 
             for line in lines:
+                # 提取 Hop 编号
+                hop_match = re.search(r'\[Hop (\d+)\]', line)
+                if hop_match:
+                    hop_num = int(hop_match.group(1))
+                    hop_numbers.append(hop_num)
+
                 if 'Thought:' in line:
                     thought = line.split('Thought:', 1)[1].strip()
                     thoughts.append(thought)
@@ -137,6 +144,9 @@ class AdvancedIRCoTAnalyzer:
             # 使用 queries 作为推理步骤（这些是实际用于检索的查询）
             sentences = queries if queries else thoughts
             full_reasoning = '\n'.join(lines)
+
+            # 计算实际使用的 hop 次数（最大 hop 编号）
+            num_hops = max(hop_numbers) if hop_numbers else 0
 
             # 提取最终答案（如果有）
             predicted_answer = None
@@ -170,6 +180,9 @@ class AdvancedIRCoTAnalyzer:
             match = re.search(r'(?:So|Thus|Therefore).*answer is:?\s*(.+?)(?:\.|$)', full_reasoning, re.IGNORECASE)
             if match:
                 predicted_answer = match.group(1).strip()
+
+            # IRCoT 没有显式的 hop 信息，用句子数量作为近似
+            num_hops = len(sentences)
 
         # === 诊断 1: 死循环检测 ===
         has_loop = False
@@ -234,6 +247,7 @@ class AdvancedIRCoTAnalyzer:
             'index': index,
             'question': question,
             'num_steps': len(sentences),
+            'num_hops': num_hops,
             'predicted_answer': predicted_answer,
             'status': status,
             'issues': issues,
@@ -243,36 +257,40 @@ class AdvancedIRCoTAnalyzer:
 
     def run_analysis(self):
         print("\n🔍 开始深度分析...")
-        
+
         stats = {
             'total': 0,
             'loops': 0,
             'no_answer': 0,
             'long_chains': 0,
-            'low_entity_density': 0
+            'low_entity_density': 0,
+            'hop_counts': []  # 记录每个问题的 hop 次数
         }
-        
+
         problematic_cases = []
+        all_results = []  # 保存所有结果用于 hop 统计
 
         for i, chain_text in enumerate(self.chains):
             res = self.parse_chain_and_diagnose(chain_text, i)
             stats['total'] += 1
-            
+            stats['hop_counts'].append(res['num_hops'])
+            all_results.append(res)
+
             if '死循环' in str(res['issues']): stats['loops'] += 1
             if res['status'] == 'NO_ANSWER': stats['no_answer'] += 1
             if res['avg_entities'] < 0.5: stats['low_entity_density'] += 1
             if res['num_steps'] > 15: stats['long_chains'] += 1
-            
+
             if res['issues']:
                 problematic_cases.append(res)
 
-        self._print_report(stats, problematic_cases)
+        self._print_report(stats, problematic_cases, all_results)
 
-    def _print_report(self, stats, cases):
+    def _print_report(self, stats, cases, all_results):
         print("\n" + "="*60)
-        print(f"📊 IRCoT 诊断报告: {self.dataset}")
+        print(f"📊 M策略诊断报告: {self.dataset}")
         print("="*60)
-        
+
         total = stats['total']
         if total == 0:
             print("没有数据。")
@@ -280,20 +298,62 @@ class AdvancedIRCoTAnalyzer:
 
         print(f"分析样本数: {total}")
         print("-" * 30)
+
+        # Hop 次数统计
+        hop_counts = stats['hop_counts']
+        if hop_counts:
+            avg_hops = sum(hop_counts) / len(hop_counts)
+            min_hops = min(hop_counts)
+            max_hops = max(hop_counts)
+            hop_distribution = Counter(hop_counts)
+
+            print(f"\n🔢 Hop 次数统计:")
+            print(f"   平均 Hops: {avg_hops:.2f}")
+            print(f"   最少 Hops: {min_hops}")
+            print(f"   最多 Hops: {max_hops}")
+            print(f"\n   分布:")
+            for hop_num in sorted(hop_distribution.keys()):
+                count = hop_distribution[hop_num]
+                percentage = count / total * 100
+                bar = '█' * int(percentage / 2)  # 每个方块代表2%
+                print(f"   {hop_num} Hops: {count:4d} ({percentage:5.1f}%) {bar}")
+
+        print(f"\n⚠️  问题检测:")
         print(f"🔴 死循环 (Loops):          {stats['loops']:<5} ({stats['loops']/total:.1%})")
         print(f"🟡 未生成答案 (No Ans):     {stats['no_answer']:<5} ({stats['no_answer']/total:.1%})")
         print(f"🟡 实体稀疏 (Low Keyword):  {stats['low_entity_density']:<5} ({stats['low_entity_density']/total:.1%}) --> 影响 BM25")
         print(f"⚪ 推理过长 (>15 Steps):    {stats['long_chains']:<5} ({stats['long_chains']/total:.1%})")
         
+        # 显示不同 hop 次数的典型案例
         print("\n" + "="*60)
-        print("🕵️ 典型病历 (Top 5 Failed Cases)")
+        print("📝 Hop 次数典型案例 (Sample Cases by Hops)")
         print("="*60)
-        
+
+        # 为每个 hop 数显示一个示例
+        hop_examples = {}
+        for res in all_results:
+            hop_num = res['num_hops']
+            if hop_num not in hop_examples and hop_num > 0:
+                hop_examples[hop_num] = res
+
+        for hop_num in sorted(hop_examples.keys())[:5]:  # 最多显示5个
+            case = hop_examples[hop_num]
+            print(f"\n[{hop_num} Hops] Case #{case['index']}")
+            print(f"状态: {case['status']}")
+            print(f"推理步骤数: {case['num_steps']}")
+            if case['predicted_answer']:
+                print(f"答案: {case['predicted_answer'][:100]}...")
+            print("-" * 30)
+
+        print("\n" + "="*60)
+        print("🕵️ 典型问题案例 (Top 5 Failed Cases)")
+        print("="*60)
+
         # 优先展示死循环和无答案的
         priority_cases = sorted(cases, key=lambda x: (x['status'] != 'LOOP', len(x['issues'])), reverse=False)
-        
+
         for i, case in enumerate(priority_cases[:5]):
-            print(f"\n[Case #{case['index']}] 状态: {case['status']}")
+            print(f"\n[Case #{case['index']}] 状态: {case['status']} | Hops: {case['num_hops']}")
             print(f"Q: {case['question']}")
             print(f"问题点: {', '.join(case['issues'])}")
             print("推理片段 (最后3步):")
@@ -303,15 +363,34 @@ class AdvancedIRCoTAnalyzer:
 
         # 给出针对性建议
         print("\n💡 优化建议 (Thesis Action Plan):")
+
+        # Hop 次数相关建议
+        if hop_counts:
+            avg_hops = sum(hop_counts) / len(hop_counts)
+            max_hops = max(hop_counts)
+
+            if avg_hops > 3:
+                print(f"1. **高 Hop 次数** (平均 {avg_hops:.2f} hops): 推理链较长，可能影响效率。")
+                print("   -> 建议: 检查是否可以通过更好的 prompt 减少无效检索步骤。")
+            elif avg_hops < 1.5:
+                print(f"1. **低 Hop 次数** (平均 {avg_hops:.2f} hops): 可能未充分利用多跳能力。")
+                print("   -> 建议: 检查是否过早终止或检索失败。")
+            else:
+                print(f"1. **Hop 次数适中** (平均 {avg_hops:.2f} hops): 推理深度合理。")
+
+            if max_hops >= 4:
+                print(f"2. **检测到最大 {max_hops} hops**: 部分问题需要深度推理。")
+                print("   -> 考虑: 是否需要增加 MAX_HOPS 限制以支持更复杂的问题。")
+
         if stats['loops'] / total > 0.1:
-            print("1. **Loop Detected**: 模型陷入重复。建议在 Prompt 中加入 'Do not repeat previous steps'，或在代码中检测到重复即强制截断。")
-        
+            print("3. **Loop Detected**: 模型陷入重复。建议在 Prompt 中加入 'Do not repeat previous steps'，或在代码中检测到重复即强制截断。")
+
         if stats['low_entity_density'] / total > 0.3:
-            print("2. **Low Entity**: 中间推理缺乏实体，导致 BM25 搜不到东西。")
+            print("4. **Low Entity**: 中间推理缺乏实体，导致 BM25 搜不到东西。")
             print("   -> 强力推荐：使用 '标题扩展法' (Query Expansion with Titles) 代替句子检索。")
-            
+
         if stats['no_answer'] / total > 0.2:
-            print("3. **No Answer**: 检索彻底失败，模型无法推导。需要检查 Hit Rate。")
+            print("5. **No Answer**: 检索彻底失败，模型无法推导。需要检查 Hit Rate。")
 
 def main():
     print("=" * 80)
