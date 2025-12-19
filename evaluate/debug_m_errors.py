@@ -525,7 +525,7 @@ def find_error_cases(dataset_name: str, num_cases: int = 2) -> List[Dict]:
         错误案例列表
     """
     # 加载预测结果
-    predictions_file = f"evaluate/outputs/stage2/{dataset_name}_predictions.json"
+    predictions_file = f"evaluate/outputs/stage2_predictions/{dataset_name}_predictions.json"
     if not os.path.exists(predictions_file):
         print(f"✗ Predictions file not found: {predictions_file}")
         return []
@@ -534,7 +534,7 @@ def find_error_cases(dataset_name: str, num_cases: int = 2) -> List[Dict]:
         predictions = json.load(f)
 
     # 加载分类结果
-    classifications_file = f"evaluate/outputs/stage1/{dataset_name}_classifications.json"
+    classifications_file = f"evaluate/outputs/stage1_classifications/{dataset_name}_classifications.json"
     if not os.path.exists(classifications_file):
         print(f"✗ Classifications file not found: {classifications_file}")
         return []
