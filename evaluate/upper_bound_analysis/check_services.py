@@ -76,7 +76,7 @@ def check_llm_service(host="localhost", port=8000):
 
 def check_retriever_service(host="localhost", port=8001):
     """检查 Retriever 服务"""
-    url = f"http://{host}:{port}/search"
+    url = f"http://{host}:{port}/retrieve/"
 
     print(f"\n{'='*70}")
     print("检查 Retriever 服务")
@@ -105,10 +105,10 @@ def check_retriever_service(host="localhost", port=8001):
             print(f"✗ Retriever 服务路径错误 (404)")
             print(f"  URL: {url}")
             print(f"\n  可能的原因:")
-            print(f"  1. 服务路径不是 /search")
+            print(f"  1. 服务路径不是 /retrieve/")
             print(f"  2. 服务还未完全启动")
             print(f"\n  建议:")
-            print(f"  1. 检查 Retriever 服务的 API 路径")
+            print(f"  1. 检查 Retriever 服务的 API 路径（应该是 /retrieve/）")
             print(f"  2. 查看 Retriever 服务日志")
             return False
         else:

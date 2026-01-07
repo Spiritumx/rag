@@ -153,7 +153,7 @@ def get_retriever_config(config_path: str = None) -> Dict[str, Any]:
     return {
         'host': retriever_config['host'],  # 原始 host
         'port': port,
-        'url': f"{host}:{port}/search",
+        'url': f"{host}:{port}/retrieve/",
         'timeout': retriever_config.get('timeout', 30)
     }
 

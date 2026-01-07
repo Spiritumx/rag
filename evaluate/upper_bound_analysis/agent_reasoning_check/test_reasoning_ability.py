@@ -57,7 +57,7 @@ class ReasoningAbilityTester:
             parallel_threads: 并行线程数
         """
         self.llm_backend = llm_backend
-        self.retriever_url = f"http://{retriever_host}:{retriever_port}/search"
+        self.retriever_url = f"http://{retriever_host}:{retriever_port}/retrieve/"
         self.output_dir = output_dir
         self.parallel_threads = parallel_threads
         self.metric = SquadAnswerEmF1Metric()

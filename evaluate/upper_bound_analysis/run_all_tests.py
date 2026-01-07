@@ -160,8 +160,8 @@ class UpperBoundTestRunner:
             if self.predictions_file:
                 predictions_file = self.predictions_file.format(dataset=dataset)
             else:
-                # 默认路径
-                predictions_file = f"outputs/stage2_predictions/{dataset}/predictions_contexts.json"
+                # 默认路径 - Stage 2 生成的文件格式
+                predictions_file = f"evaluate/outputs/stage2_predictions/{dataset}_predictions_contexts.json"
 
             # 检查文件是否存在
             if not os.path.exists(predictions_file):
