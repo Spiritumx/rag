@@ -25,8 +25,9 @@ from tqdm import tqdm
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-# Add parent directory to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
+# Add project root directory to path
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+sys.path.insert(0, project_root)
 
 
 class RetrievalRecallTester:

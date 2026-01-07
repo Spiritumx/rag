@@ -4,8 +4,21 @@
 
 ## 🚀 一键运行（最简单的方式）⭐
 
+### 步骤 1: 检查服务（推荐）
+
 ```bash
 cd evaluate/upper_bound_analysis
+python check_services.py
+```
+
+这会自动检查：
+- ✓ LLM 服务是否运行
+- ✓ Retriever 服务是否运行
+- ✓ 测试数据是否存在
+
+### 步骤 2: 运行测试
+
+```bash
 python run_all_tests.py
 ```
 
@@ -21,6 +34,9 @@ python run_all_tests.py
 
 **常用命令：**
 ```bash
+# 检查服务
+python check_services.py
+
 # 快速验证（3分钟）
 python run_all_tests.py --max-samples 20
 

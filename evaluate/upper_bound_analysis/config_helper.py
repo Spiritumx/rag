@@ -12,19 +12,47 @@ import yaml
 from typing import Dict, Any, Optional
 
 
-def load_upper_bound_config(config_path: str = "evaluate/upper_bound_analysis/config.yaml") -> Dict[str, Any]:
+def _get_config_path(relative_path: str) -> str:
+    """
+    获取配置文件的绝对路径
+
+    Args:
+        relative_path: 相对路径
+
+    Returns:
+        绝对路径
+    """
+    # 从当前文件位置找到项目根目录
+    current_file = os.path.abspath(__file__)
+    upper_bound_dir = os.path.dirname(current_file)
+    evaluate_dir = os.path.dirname(upper_bound_dir)
+    project_root = os.path.dirname(evaluate_dir)
+
+    # 构建绝对路径
+    abs_path = os.path.join(project_root, relative_path)
+    return abs_path
+
+
+def load_upper_bound_config(config_path: str = None) -> Dict[str, Any]:
     """
     加载上限测试配置文件
 
     Args:
-        config_path: 配置文件路径
+        config_path: 配置文件路径（可以是相对或绝对路径）
 
     Returns:
         配置字典
     """
+    if config_path is None:
+        config_path = "evaluate/upper_bound_analysis/config.yaml"
+
+    # 如果是相对路径，转换为绝对路径
+    if not os.path.isabs(config_path):
+        config_path = _get_config_path(config_path)
+
     if not os.path.exists(config_path):
         # 如果统一配置不存在，尝试从主配置加载
-        fallback_path = "evaluate/config.yaml"
+        fallback_path = _get_config_path("evaluate/config.yaml")
         if os.path.exists(fallback_path):
             print(f"Warning: {config_path} not found, using {fallback_path}")
             config_path = fallback_path
@@ -37,7 +65,7 @@ def load_upper_bound_config(config_path: str = "evaluate/upper_bound_analysis/co
     return config
 
 
-def load_evaluate_config(config_path: str = "evaluate/config.yaml") -> Dict[str, Any]:
+def load_evaluate_config(config_path: str = None) -> Dict[str, Any]:
     """
     加载评估配置文件
 
@@ -47,6 +75,14 @@ def load_evaluate_config(config_path: str = "evaluate/config.yaml") -> Dict[str,
     Returns:
         配置字典
     """
+    if config_path is None:
+        # 默认使用上限测试的配置文件
+        config_path = "evaluate/upper_bound_analysis/config.yaml"
+
+    # 如果是相对路径，转换为绝对路径
+    if not os.path.isabs(config_path):
+        config_path = _get_config_path(config_path)
+
     if not os.path.exists(config_path):
         raise FileNotFoundError(f"Config file not found: {config_path}")
 
@@ -56,7 +92,7 @@ def load_evaluate_config(config_path: str = "evaluate/config.yaml") -> Dict[str,
     return config
 
 
-def get_llm_config(config_path: str = "evaluate/config.yaml") -> Dict[str, Any]:
+def get_llm_config(config_path: str = None) -> Dict[str, Any]:
     """
     获取 LLM 配置
 
@@ -92,7 +128,7 @@ def get_llm_config(config_path: str = "evaluate/config.yaml") -> Dict[str, Any]:
     }
 
 
-def get_retriever_config(config_path: str = "evaluate/config.yaml") -> Dict[str, Any]:
+def get_retriever_config(config_path: str = None) -> Dict[str, Any]:
     """
     获取 Retriever 配置
 
@@ -123,7 +159,7 @@ def get_retriever_config(config_path: str = "evaluate/config.yaml") -> Dict[str,
 
 
 def get_config_with_overrides(
-    config_path: str = "evaluate/config.yaml",
+    config_path: str = None,
     llm_host: Optional[str] = None,
     llm_port: Optional[int] = None,
     retriever_host: Optional[str] = None,
@@ -180,7 +216,7 @@ def get_config_with_overrides(
 
 def get_upper_bound_config(
     module_name: str = None,
-    config_path: str = "evaluate/upper_bound_analysis/config.yaml"
+    config_path: str = None
 ) -> Dict[str, Any]:
     """
     获取上限测试模块的完整配置
@@ -208,7 +244,7 @@ def get_upper_bound_config(
     return result
 
 
-def get_max_samples(config_path: str = "evaluate/upper_bound_analysis/config.yaml") -> Optional[int]:
+def get_max_samples(config_path: str = None) -> Optional[int]:
     """
     获取测试样本数量配置
 
@@ -219,7 +255,7 @@ def get_max_samples(config_path: str = "evaluate/upper_bound_analysis/config.yam
     return config.get('data', {}).get('max_samples')
 
 
-def get_datasets(config_path: str = "evaluate/upper_bound_analysis/config.yaml") -> list:
+def get_datasets(config_path: str = None) -> list:
     """
     获取要测试的数据集列表
 

@@ -23,8 +23,13 @@ from tqdm import tqdm
 import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-# Add parent directory to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
+# Add project root directory to path
+project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+sys.path.insert(0, project_root)
+
+# Add current directory to path for llm_backend
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, current_dir)
 
 from llm_backend import create_backend, LLMBackend
 from metrics.squad_answer_em_f1 import SquadAnswerEmF1Metric
