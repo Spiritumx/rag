@@ -84,10 +84,19 @@ def check_retriever_service(host="localhost", port=8001):
     print(f"URL: {url}")
 
     try:
-        # 发送测试请求
+        # 发送测试请求（使用与stage2相同的完整格式）
         response = requests.post(
             url,
-            json={'question': 'test', 'top_k': 5},
+            json={
+                'retrieval_method': 'retrieve_from_elasticsearch',
+                'query_text': 'test query',
+                'rerank_query_text': 'test query',
+                'max_hits_count': 5,
+                'max_buffer_count': 20,
+                'corpus_name': 'wiki',  # 默认使用wiki
+                'document_type': 'title_paragraph_text',
+                'retrieval_backend': 'hybrid'
+            },
             headers={'Content-Type': 'application/json'},
             timeout=10
         )
@@ -97,9 +106,13 @@ def check_retriever_service(host="localhost", port=8001):
             print(f"  状态码: {response.status_code}")
             try:
                 data = response.json()
-                print(f"  响应: {str(data)[:100]}...")
-            except:
-                print(f"  响应: {response.text[:100]}...")
+                retrieval_results = data.get('retrieval', [])
+                print(f"  响应: 成功获取 {len(retrieval_results)} 个检索结果")
+                if retrieval_results:
+                    print(f"  示例文档: {retrieval_results[0].get('title', 'N/A')[:50]}...")
+            except Exception as e:
+                print(f"  响应解析失败: {e}")
+                print(f"  原始响应: {response.text[:200]}...")
             return True
         elif response.status_code == 404:
             print(f"✗ Retriever 服务路径错误 (404)")

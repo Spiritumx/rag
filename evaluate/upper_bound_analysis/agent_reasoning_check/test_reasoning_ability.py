@@ -61,6 +61,7 @@ class ReasoningAbilityTester:
         self.output_dir = output_dir
         self.parallel_threads = parallel_threads
         self.metric = SquadAnswerEmF1Metric()
+        self.current_corpus_name = 'wiki'  # 默认corpus，会在运行时更新
 
         os.makedirs(output_dir, exist_ok=True)
 
@@ -89,7 +90,7 @@ class ReasoningAbilityTester:
 
     def retrieve_contexts(self, question: str, top_k: int = 5) -> List[Dict]:
         """
-        调用检索服务
+        调用检索服务（使用与stage2相同的完整格式）
 
         Args:
             question: 问题
@@ -102,18 +103,26 @@ class ReasoningAbilityTester:
             response = requests.post(
                 self.retriever_url,
                 json={
-                    'question': question,
-                    'top_k': top_k
+                    'retrieval_method': 'retrieve_from_elasticsearch',
+                    'query_text': question,
+                    'rerank_query_text': question,
+                    'max_hits_count': top_k,
+                    'max_buffer_count': top_k * 4,
+                    'corpus_name': self.current_corpus_name,
+                    'document_type': 'title_paragraph_text',
+                    'retrieval_backend': 'hybrid'
                 },
                 timeout=30
             )
 
             if response.status_code != 200:
                 print(f"Warning: Retriever failed (status {response.status_code})")
+                if response.status_code == 400:
+                    print(f"  Response: {response.text[:200]}")
                 return []
 
             result = response.json()
-            return result.get('contexts', [])
+            return result.get('retrieval', [])
 
         except Exception as e:
             print(f"Warning: Retriever error: {e}")
@@ -222,6 +231,19 @@ Answer: """
         print(f"LLM Backend: {self.llm_backend.model_name}")
         print(f"Using {self.parallel_threads} parallel threads")
         print(f"{'='*70}")
+
+        # 设置corpus_name（与stage2保持一致）
+        dataset_to_corpus = {
+            'hotpotqa': 'hotpotqa',
+            'musique': 'musique',
+            '2wikimultihopqa': '2wikimultihopqa',
+            'iirc': 'iirc',
+            'nq': 'nq',
+            'squad': 'squad',
+            'trivia': 'trivia'
+        }
+        self.current_corpus_name = dataset_to_corpus.get(dataset_name.lower(), 'wiki')
+        print(f"Corpus: {self.current_corpus_name}")
 
         # 加载数据
         test_data = self.load_test_data(dataset_name, data_dir, max_samples)

@@ -121,9 +121,54 @@ class RetrievalRecallTester:
             raise FileNotFoundError(f"Predictions file not found: {predictions_file}")
 
         with open(predictions_file, 'r', encoding='utf-8') as f:
-            predictions = json.load(f)
+            raw_predictions = json.load(f)
+
+        # 验证并统一格式
+        if not isinstance(raw_predictions, dict):
+            raise ValueError(f"Predictions file must be a dictionary, got {type(raw_predictions).__name__}")
+
+        predictions = {}
+        format_issues = []
+
+        for qid, value in raw_predictions.items():
+            if isinstance(value, list):
+                # 正确格式：列表
+                predictions[qid] = value
+            elif isinstance(value, dict):
+                # 字典格式：尝试转换
+                if 'titles' in value or 'paras' in value:
+                    # 旧格式：{"titles": [...], "paras": [...]}
+                    format_issues.append(qid)
+                    titles = value.get('titles', [])
+                    paras = value.get('paras', [])
+                    converted_contexts = []
+                    for i in range(max(len(titles), len(paras))):
+                        title = titles[i] if i < len(titles) else ""
+                        para = paras[i] if i < len(paras) else ""
+                        converted_contexts.append({
+                            "title": title,
+                            "paragraph_text": para
+                        })
+                    predictions[qid] = converted_contexts
+                else:
+                    # 其他字典格式，尝试提取
+                    print(f"⚠ Warning: Unexpected dict format for QID '{qid}': {list(value.keys())}")
+                    predictions[qid] = []
+            else:
+                print(f"⚠ Warning: Unexpected type for QID '{qid}': {type(value).__name__}")
+                predictions[qid] = []
+
+        if format_issues:
+            print(f"⚠ Warning: Found {len(format_issues)} questions with old dict format, converted to list")
+            print(f"  Sample QIDs: {format_issues[:3]}")
 
         print(f"✓ Loaded retrieval results from {predictions_file}")
+        print(f"  Total questions: {len(predictions)}")
+        if predictions:
+            sample_qid = next(iter(predictions))
+            sample_contexts = predictions[sample_qid]
+            print(f"  Sample: QID '{sample_qid}' has {len(sample_contexts)} contexts")
+
         return predictions
 
     def check_answer_in_context(self, answer: str, context_text: str, fuzzy: bool = True) -> bool:
