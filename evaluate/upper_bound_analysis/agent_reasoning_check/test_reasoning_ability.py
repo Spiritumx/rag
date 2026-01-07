@@ -233,14 +233,13 @@ Answer: """
         print(f"{'='*70}")
 
         # 设置corpus_name（与stage2保持一致）
+
         dataset_to_corpus = {
             'hotpotqa': 'hotpotqa',
             'musique': 'musique',
             '2wikimultihopqa': '2wikimultihopqa',
             'iirc': 'iirc',
-            'nq': 'nq',
-            'squad': 'squad',
-            'trivia': 'trivia'
+            'wiki': 'wiki'
         }
         self.current_corpus_name = dataset_to_corpus.get(dataset_name.lower(), 'wiki')
         print(f"Corpus: {self.current_corpus_name}")
