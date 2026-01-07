@@ -243,7 +243,7 @@ class RetrievalRecallTester:
             try:
                 # 获取检索结果
                 if qid not in retrieval_results:
-                    return qid, None, f"No retrieval results for {qid}"
+                    return qid, None, None, f"No retrieval results for {qid}"
 
                 retrieved_contexts = retrieval_results[qid]
 
