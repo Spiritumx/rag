@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python evaluate/upper_bound_analysis/config_helper.py:*)"
+    ]
+  }
+}

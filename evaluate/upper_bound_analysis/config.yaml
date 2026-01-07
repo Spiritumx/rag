@@ -1,0 +1,199 @@
+# Upper Bound Analysis Framework - Unified Configuration
+# 上限分析框架 - 统一配置
+#
+# 此配置文件供三个上限测试模块共用：
+# 1. reader_upper_bound - Reader 上限测试
+# 2. retriever_recall_upperbound - Retriever 召回上限测试
+# 3. agent_reasoning_check - Agent 推理能力测试
+
+# ============================================================================
+# 服务配置（从主 evaluate/config.yaml 继承，但可独立修改）
+# ============================================================================
+
+# LLM 服务配置
+llm:
+  server_host: "localhost"
+  server_port: 8000
+  max_length: 300
+  temperature: 0.1
+  model_name: "meta-llama/Meta-Llama-3-8B-Instruct"
+  model_path: "/root/autodl-tmp/model/Meta-Llama-3-8B-Instruct"
+
+# Retriever 服务配置
+retriever:
+  host: "localhost"
+  port: 8001
+  timeout: 30
+
+# ============================================================================
+# 数据配置
+# ============================================================================
+
+data:
+  base_dir: "processed_data"
+
+  # 要测试的数据集
+  datasets:
+    - musique
+    - 2wikimultihopqa
+    - hotpotqa  # 取消注释以测试更多数据集
+    - squad
+    - trivia
+    - nq
+
+  # 测试样本数量（核心配置⭐）
+  # null = 使用完整数据集（可能需要几小时）
+  # 100 = 只测试前100个样本（推荐，5-10分钟）
+  # 50 = 快速测试（2-5分钟）
+  max_samples: 100  # 默认100个样本，平衡速度和准确性
+
+# ============================================================================
+# 1. Reader Upper Bound 配置
+# ============================================================================
+
+reader_upper_bound:
+  # Prompt 风格
+  prompt:
+    default_style: "standard"  # standard, cot, structured
+
+    # 批量测试时使用的风格（用于对比实验）
+    test_styles:
+      - standard
+      # - cot        # 取消注释以对比 CoT
+      # - structured
+
+  # 输出配置
+  output:
+    base_dir: "evaluate/upper_bound_analysis/reader_upper_bound/outputs"
+    save_error_cases: true
+    save_detailed_results: true
+    generate_diagnosis_report: true
+
+  # 分析配置
+  analysis:
+    sample_error_count: 10  # 报告中显示的错误案例数
+    analyze_question_types: true
+    compare_prompt_styles: false  # 是否自动比较多种 Prompt
+
+# ============================================================================
+# 2. Retriever Recall Upper Bound 配置
+# ============================================================================
+
+retriever_recall_upperbound:
+  # Recall@K 的 K 值列表
+  k_values:
+    - 5    # 给 LLM 的文档数
+    - 20   # Rerank 后的文档数
+    - 100  # 粗排候选数
+
+  # 匹配模式
+  # fuzzy: 模糊匹配（推荐，容忍标点/大小写差异）
+  # strict: 严格匹配
+  match_mode: "fuzzy"
+
+  # 输出配置
+  output:
+    base_dir: "evaluate/upper_bound_analysis/retriever_recall_upperbound/outputs"
+    save_detailed_results: true
+    save_context_overlap: true
+    generate_diagnosis_report: true
+
+# ============================================================================
+# 3. Agent Reasoning Check 配置
+# ============================================================================
+
+agent_reasoning_check:
+  # LLM Backend 配置
+  backends:
+    # 基线 LLM（本地 Llama）
+    baseline:
+      type: "local_llama"
+      name: "Llama-3-8B-Local"
+      host: "localhost"  # 从上面的 llm.server_host 继承
+      port: 8000         # 从上面的 llm.server_port 继承
+
+    # 强 LLM（用于对比，可选）
+    # 取消注释以启用 GPT-4o 对比测试
+    # strong_llm:
+    #   type: "gpt4"
+    #   name: "GPT-4o"
+    #   model: "gpt-4o"
+    #   api_key: null  # 从环境变量 OPENAI_API_KEY 读取
+
+    # DeepSeek（备选，更便宜）
+    # deepseek:
+    #   type: "deepseek"
+    #   name: "DeepSeek-V3"
+    #   model: "deepseek-chat"
+    #   api_key: null  # 从环境变量 DEEPSEEK_API_KEY 读取
+
+  # 检索配置
+  retrieval:
+    top_k: 5  # 检索文档数量
+
+  # 输出配置
+  output:
+    base_dir: "evaluate/upper_bound_analysis/agent_reasoning_check/outputs"
+    save_predictions: true
+    save_chains: true
+    save_contexts: true
+    generate_breakdown_chart: true  # 生成性能分解图（论文用）
+    generate_comparison_chart: true # 生成 Backend 对比图
+
+# ============================================================================
+# 性能分解分析配置
+# ============================================================================
+
+performance_breakdown:
+  # 是否自动生成性能分解报告
+  auto_generate: true
+
+  # 图表配置
+  charts:
+    dpi: 300  # 图表分辨率（论文用高分辨率）
+    format: "png"  # png, pdf, svg
+
+  # 输出路径
+  output_dir: "evaluate/upper_bound_analysis/agent_reasoning_check/outputs"
+
+# ============================================================================
+# 执行配置
+# ============================================================================
+
+execution:
+  # 并行线程数（用于加速测试）
+  # 推荐值：6-12（根据 CPU 核心数和 GPU 显存调整）
+  parallel_threads: 6  # 默认6线程并行
+
+  # 是否在出错时继续（而不是中断）
+  continue_on_error: true
+
+  # 是否显示详细日志
+  verbose: true
+
+  # 保存检查点的频率（每处理N个样本保存一次）
+  checkpoint_frequency: 50
+
+# ============================================================================
+# 快速测试预设
+# ============================================================================
+
+# 取消下面的注释以使用不同的测试模式
+
+# 极速测试模式（2分钟）
+# quick_test:
+#   max_samples: 20
+#   datasets: ["musique"]
+#   k_values: [5, 20]
+
+# 标准测试模式（10分钟）- 当前使用
+standard_test:
+  max_samples: 100
+  datasets: ["musique", "2wikimultihopqa"]
+  k_values: [5, 20, 100]
+
+# 完整测试模式（1-2小时）
+# full_test:
+#   max_samples: null  # 全部样本
+#   datasets: ["musique", "2wikimultihopqa", "hotpotqa"]
+#   k_values: [5, 10, 20, 50, 100]
