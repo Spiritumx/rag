@@ -380,7 +380,7 @@ def main():
                        default=['musique', 'trivia'],
                        help='Datasets to diagnose')
     parser.add_argument('--output-dir',
-                       default='evaluate/upper_bound_analysis/reader_upper_bound/outputs',
+                       default='evaluate/reader_upper_bound/outputs',
                        help='Output directory')
     parser.add_argument('--prompt-style', default='standard',
                        choices=['standard', 'cot', 'structured'],
