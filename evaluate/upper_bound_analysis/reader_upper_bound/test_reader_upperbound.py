@@ -200,20 +200,18 @@ Answer: """
 
         else:
             # Standard Prompting
-            prompt = f"""Answer the question based on the provided documents. Be concise and accurate.
+            prompt = f"""Instructions:
+1. You are a precise Question Answering machine.
+2. Read the following documents carefully.
+3. Answer the question using ONLY the information from the documents.
+4. Output VERY SHORT answers (1-5 words). Do NOT write full sentences.
+5. Do NOT say "The answer is...". Just output the entity or phrase.
 
-*** DOCUMENTS ***
+Context:
 {context}
 
-*** QUESTION ***
-{question}
-
-*** INSTRUCTIONS ***
-1. Read the documents carefully
-2. Extract the answer directly from the documents
-3. Provide a concise answer (1-5 words if possible)
-
-Answer: """
+Q: {question}
+A: """
 
         return prompt
 
