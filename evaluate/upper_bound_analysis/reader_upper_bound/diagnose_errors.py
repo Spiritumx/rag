@@ -20,7 +20,7 @@ import difflib
 class ErrorDiagnoser:
     """错误诊断器"""
 
-    def __init__(self, output_dir: str = "evaluate/upper_bound_analysis/reader_upper_bound/outputs"):
+    def __init__(self, output_dir: str = "evaluate/reader_upper_bound/outputs"):
         self.output_dir = output_dir
 
     def load_error_cases(self, dataset_name: str, prompt_style: str = "standard") -> List[Dict]:
