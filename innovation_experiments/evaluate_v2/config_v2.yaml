@@ -1,0 +1,172 @@
+# RAG + Innovations Evaluation Pipeline Configuration (V2)
+# This config enables three innovations:
+# 1. Adaptive Retrieval (Port 8002)
+# 2. Cascading Dynamic Routing
+# 3. MI-RA-ToT Reasoning
+
+# Classifier settings (SHARED - uses baseline model)
+classifier:
+  base_model_path: "/root/autodl-tmp/model/Qwen2.5-3B-Instruct"
+  lora_adapter_path: "/root/autodl-tmp/output/Qwen2.5-3B-RAG-Router/lora_model"
+  max_seq_length: 2048
+  temperature: 0.01
+  max_new_tokens: 256
+  device: "cuda"
+
+# LLM settings (SHARED - Llama 3-8B on port 8000)
+llm:
+  model_name: "meta-llama/Meta-Llama-3-8B-Instruct"
+  model_path: "/root/autodl-tmp/model/Meta-Llama-3-8B-Instruct"
+  server_host: "localhost"
+  server_port: 8000
+  max_length: 200
+  temperature: 1.0
+  auto_start_server: false  # Set to true to auto-start Llama server
+
+# Retriever settings (INNOVATION 1: Port 8002 for adaptive retrieval)
+retriever:
+  host: "localhost"
+  port: 8002  # V2 retriever with dynamic weights
+  timeout: 30
+  max_retries: 10
+
+# Datasets to process
+datasets:
+  - squad
+  - hotpotqa
+  - trivia
+  - nq
+  - musique
+  - 2wikimultihopqa
+
+# Data paths (SHARED with baseline)
+data:
+  base_path: "processed_data"
+  test_file: "test_subsampled.jsonl"
+
+# Action mapping
+actions:
+  Z: "zero_retrieval"          # Zero retrieval (direct LLM)
+  S-Sparse: "single_bm25"       # Single-hop BM25
+  S-Dense: "single_hnsw"        # Single-hop HNSW (dense)
+  S-Hybrid: "single_hybrid"     # Single-hop Hybrid
+  M: "multi_hop_tot"            # Multi-hop with Tree-of-Thought (Innovation 3)
+
+# Output paths (SEPARATE from baseline)
+outputs:
+  stage1_dir: "evaluate/outputs/stage1_classifications"  # SHARED: Reuse baseline classifications
+  stage2_dir: "innovation_experiments/evaluate_v2/outputs_v2/stage2_predictions_v2"
+  stage3_dir: "innovation_experiments/evaluate_v2/outputs_v2/stage3_metrics_v2"
+  analysis_dir: "innovation_experiments/evaluate_v2/outputs_v2/analysis"
+  cascade_dir: "innovation_experiments/evaluate_v2/outputs_v2/cascade_analysis"
+
+# Execution settings
+execution:
+  batch_size: 16                # GPU batch size for inference
+  checkpoint_frequency: 5       # Save checkpoint every N batches
+  resume: false                 # Resume from last checkpoint
+  service_check: true           # Validate services before running
+  log_file: "innovation_experiments/evaluate_v2/pipeline_v2.log"
+  parallel_threads: 12          # Parallel processing threads
+
+# ============================================================================
+# INNOVATION-SPECIFIC SETTINGS
+# ============================================================================
+
+innovations:
+  # Innovation 1: Adaptive Retrieval with Dynamic Weights
+  adaptive_retrieval:
+    enabled: true
+    ner_model: "en_core_web_sm"  # spaCy model for entity detection
+    description: "Dynamic hybrid weight adjustment based on query characteristics"
+
+  # Innovation 2: Cascading Dynamic Routing
+  cascading_routing:
+    enabled: true
+    confidence_threshold: 0.6  # Cascade if confidence < 0.6 (global default)
+    verifier_model: "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    verifier_device: "cuda"
+    max_contexts_for_verification: 3  # Top-N contexts to verify against
+    cascade_target: "M-ToT"  # Which strategy to cascade to (M-ToT)
+    # Note: Only non-M strategies will be verified and potentially cascaded
+    # M strategies are already the most robust, no need to cascade
+    description: "Confidence-based fallback from weak strategies to MI-RA-ToT"
+
+  # Innovation 3: MI-RA-ToT (Mutual Information Tree-of-Thought)
+  tot_reasoning:
+    enabled: true
+
+    # Beam search parameters
+    beam_width: 3  # Number of paths to keep per layer (B)
+    max_depth: 4   # Maximum reasoning depth (layers)
+
+    # Query expansion parameters
+    candidates_per_node: 3  # k: Number of next-step queries per node
+
+    # Mutual Information scoring
+    mi_alpha: 0.7  # Weight for relevance component (0-1)
+    mi_beta: 0.3   # Weight for novelty component (0-1)
+    # Formula: MI_gain = α × relevance(doc, question) + β × novelty(doc, context)
+
+    # Termination criteria
+    min_confidence_to_answer: 0.7  # Minimum confidence to stop searching
+    allow_early_termination: true  # Stop if high-confidence answer found
+
+    # Resource limits
+    max_total_retrievals: 20  # Maximum retrieval operations per question
+    retrieval_timeout: 120     # Seconds per retrieval operation
+
+    description: "Beam search with MI-based path scoring and pruning"
+
+# ============================================================================
+# DATASET-SPECIFIC OVERRIDES (Optional)
+# ============================================================================
+
+dataset_overrides:
+  # Example: Different thresholds for different datasets
+  # musique:
+  #   innovations:
+  #     cascading_routing:
+  #       confidence_threshold: 0.65  # Higher threshold for multi-hop dataset
+  #     tot_reasoning:
+  #       max_depth: 5  # More depth for complex questions
+
+# ============================================================================
+# ABLATION STUDY SETTINGS (For experiments)
+# ============================================================================
+
+ablation:
+  # Set to true to disable specific innovations for ablation study
+  disable_adaptive_retrieval: false
+  disable_cascading: false
+  disable_tot: false
+
+  # Force all questions to use a specific strategy (overrides classifier)
+  # Options: null, "Z", "S-Sparse", "S-Dense", "S-Hybrid", "M-ToT"
+  force_strategy: null
+
+# ============================================================================
+# LOGGING & ANALYSIS
+# ============================================================================
+
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  log_adaptive_weights: true  # Log QueryAnalyzer weight decisions
+  log_cascade_decisions: true  # Log when cascade is triggered
+  log_tot_paths: true          # Log ToT beam search paths
+  save_intermediate_results: true  # Save retrieval results at each hop
+
+analysis:
+  # What metrics to compute in Stage 3
+  compute_cascade_metrics: true
+  compute_weight_distribution: true
+  compute_tot_path_analysis: true
+  generate_case_studies: true  # Save example questions for paper
+
+  # Case study criteria
+  case_study_samples: 10  # Number of examples per category
+  case_study_categories:
+    - "cascade_improved"      # Questions where cascade helped
+    - "cascade_unnecessary"   # Questions where cascade didn't help
+    - "tot_found_better_path" # Questions where ToT beat greedy
+    - "adaptive_weights_mattered"  # Questions where weight choice was critical
