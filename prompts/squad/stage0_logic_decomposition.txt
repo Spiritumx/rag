@@ -1,0 +1,16 @@
+Task: Convert the complex question into a Logical Path.
+Use the format: Entity(Attribute) -> [Target]
+
+*** EXAMPLES ***
+Q: "What is the acronym of the parent organization of Danish Football Union?"
+Plan: Parent_Org(Danish Football Union) -> [Org], Acronym([Org]) -> [Answer]
+
+Q: "Who is the director of the film Titanic born in?"
+Plan: Director(Film: Titanic) -> [Person], Birthplace([Person]) -> [Answer]
+
+Q: "What is the capital of the country where A was born?"
+Plan: Birthplace(A) -> [Country], Capital([Country]) -> [Answer]
+
+*** YOUR TURN ***
+Q: "{query}"
+Plan:

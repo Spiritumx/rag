@@ -1,6 +1,7 @@
 import requests
 import re
 import traceback
+import os
 from typing import List, Dict, Any, Set
 
 def _extract_llm_text(response_json: Dict[str, Any]) -> str:
@@ -110,27 +111,40 @@ def _is_semantically_similar(new_query: str, history_queries: Set[str], threshol
             return True
     return False
 
-def _generate_logical_plan(query: str, llm_url: str) -> str:
+def load_prompt_template(dataset_name: str, stage: str) -> str:
+    """
+    Load M strategy prompt template from file.
+
+    Args:
+        dataset_name: e.g., 'hotpotqa', 'squad'
+        stage: 'stage0', 'stage1', or 'stage2'
+
+    Returns:
+        Prompt template string
+    """
+    stage_files = {
+        'stage0': 'stage0_logic_decomposition.txt',
+        'stage1': 'stage1_iterative_reasoning_cot.txt',
+        'stage2': 'stage2_final_answer_direct.txt'
+    }
+
+    prompt_path = f"prompts/{dataset_name}/{stage_files[stage]}"
+
+    # Fallback to hotpotqa if file doesn't exist
+    if not os.path.exists(prompt_path):
+        prompt_path = f"prompts/hotpotqa/{stage_files[stage]}"
+        print(f"  [Warning] Using fallback prompt: {prompt_path}")
+
+    with open(prompt_path, 'r', encoding='utf-8') as f:
+        return f.read().strip()
+
+def _generate_logical_plan(query: str, llm_url: str, dataset_name: str) -> str:
     """
     [Stage 0] 逻辑拆解模块
     将自然语言转化为逻辑表达式，指导后续搜索。
     """
-    prompt = f"""Task: Convert the complex question into a Logical Path.
-Use the format: Entity(Attribute) -> [Target]
-
-*** EXAMPLES ***
-Q: "What is the acronym of the parent organization of Danish Football Union?"
-Plan: Parent_Org(Danish Football Union) -> [Org], Acronym([Org]) -> [Answer]
-
-Q: "Who is the director of the film Titanic born in?"
-Plan: Director(Film: Titanic) -> [Person], Birthplace([Person]) -> [Answer]
-
-Q: "What is the capital of the country where A was born?"
-Plan: Birthplace(A) -> [Country], Capital([Country]) -> [Answer]
-
-*** YOUR TURN ***
-Q: "{query}"
-Plan:"""
+    template = load_prompt_template(dataset_name, 'stage0')
+    prompt = template.format(query=query)
 
     try:
         resp = requests.get(
@@ -182,7 +196,7 @@ def execute_real_multihop(
     # ==============================================================================
     
     # 0.a 生成逻辑规划 (Query Rewriting / Decomposition)
-    logical_plan = _generate_logical_plan(query, llm_url)
+    logical_plan = _generate_logical_plan(query, llm_url, dataset_name)
     reasoning_chain.append(f"[Step 0] Logical Plan: {logical_plan}")
 
     # 0.b Warm Start (Initial Retrieval)
@@ -241,37 +255,13 @@ def execute_real_multihop(
             history_str = "\n".join([f"Hop {i+1}: {h}" for i, h in enumerate(history_log)]) if history_log else "None"
             
             # Prompt 核心：注入逻辑规划 (Logical Strategy)
-            base_prompt = f"""You are an expert research agent. 
-Follow the LOGICAL STRATEGY to find the answer step-by-step.
-
-*** LOGICAL STRATEGY ***
-{logical_plan}
-
-*** RULES ***
-1. Execute the next step in the Logical Strategy.
-2. DO NOT repeat "Past Actions".
-3. OUTPUT ONLY KEYWORDS (e.g., "Director Titanic", not "Who is the director").
-4. If you have the final answer in "Current Info", "Action: Answer".
-
-*** EXAMPLE ***
-Question: "Who is the director of the film Titanic?"
-Plan: Director(Titanic) -> [Person]
-Hop 1:
-Thought: I need to find the director of Titanic as per the plan.
-Action: Search [Titanic film director]
-
-*** YOUR TURN ***
-Question: {query}
-
-Past Actions:
-{history_str}
-
-Current Info:
-{current_context_snippet}
-
-Format:
-Thought: <reasoning>
-Action: <Search [Keywords] OR Answer>"""
+            template = load_prompt_template(dataset_name, 'stage1')
+            base_prompt = template.format(
+                logical_plan=logical_plan,
+                query=query,
+                history_str=history_str,
+                current_context_snippet=current_context_snippet
+            )
 
             if feedback_msg:
                 final_prompt = base_prompt + f"\n\n*** ERROR ***\n{feedback_msg}"
@@ -414,28 +404,13 @@ Action: <Search [Keywords] OR Answer>"""
     clean_history = [line for line in reasoning_chain if "Thought:" in line or "Action:" in line or "Found" in line]
     investigation_log = "\n".join(clean_history)
 
-    final_prompt = f"""Task: Answer the complex question based on the Investigation Log and Retrieved Documents.
-
-*** LOGICAL BLUEPRINT ***
-{logical_plan}
-
-*** INVESTIGATION LOG ***
-{investigation_log}
-
-*** RETRIEVED DOCUMENTS ***
-{context_str}
-
-*** INSTRUCTIONS ***
-1. Follow the Logical Blueprint to synthesize the answer.
-2. Provide a concise answer (Entity, Date, or Name only).
-
-*** QUESTION ***
-{query}
-
-*** FORMAT ***
-Thought: <analysis>
-Answer: <concise answer>
-"""
+    template = load_prompt_template(dataset_name, 'stage2')
+    final_prompt = template.format(
+        logical_plan=logical_plan,
+        investigation_log=investigation_log,
+        context_str=context_str,
+        query=query
+    )
 
     try:
         resp = requests.get(

@@ -34,6 +34,8 @@ Wikipedia Title: [Title 10]
 
 Based strictly on the context above, answer the following question.
 
+**IMPORTANT**: Provide a single entity or short phrase as the answer.
+
 Question: [QUESTION]
 
 Answer:

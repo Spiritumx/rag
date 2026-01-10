@@ -333,6 +333,8 @@ class Stage2Generator:
         }
         corpus_name = dataset_to_corpus.get(dataset_name.lower(), 'wiki')
         env['CORPUS_NAME'] = corpus_name
+        # Add dataset name for prompt path construction
+        env['DATASET_NAME'] = dataset_name
 
         # Service endpoints (add http:// prefix if not present)
         retriever_host = self.config['retriever']['host']

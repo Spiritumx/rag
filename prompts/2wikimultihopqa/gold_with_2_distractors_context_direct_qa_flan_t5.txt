@@ -34,6 +34,8 @@ Wikipedia Title: [Title 10]
 
 Based strictly on the context above, answer the following question.
 
+**IMPORTANT**: Provide a standardized entity name (e.g., use official names for people, places, organizations).
+
 Question: [QUESTION]
 
 Answer:

@@ -1,6 +1,7 @@
 # Zero retrieval config for Llama 3-8B
 # Action: Z - Direct LLM generation without retrieval
 
+local dataset_name = std.extVar("DATASET_NAME");  # Dynamic dataset for prompt selection
 local add_pinned_paras = false;
 
 {
@@ -16,7 +17,7 @@ local add_pinned_paras = false;
         "generate_answer": {
             "name": "llmqa",
             "next_model": null,
-            "prompt_file": "prompts/squad/no_context_direct_qa_flan_t5.txt",
+            "prompt_file": "prompts/" + dataset_name + "/no_context_direct_qa_flan_t5.txt",
             "question_prefix": "Answer the following question.\n",
             "prompt_reader_args": {
                 "shuffle": false,

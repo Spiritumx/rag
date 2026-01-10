@@ -34,6 +34,8 @@ Wikipedia Title: [Title 10]
 
 Based strictly on the context above, answer the following question.
 
+**IMPORTANT**: Provide only a brief entity or noun phrase (e.g., "Paris", "Albert Einstein"). Do NOT use complete sentences.
+
 Question: [QUESTION]
 
 Answer:

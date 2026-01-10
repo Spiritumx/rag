@@ -2,6 +2,7 @@
 # Action: S-Hybrid - Hybrid retrieval (BM25 + SPLADE + HNSW) with Reranker
 # Process: Each method retrieves 20 docs → merge → Reranker → Top-10
 
+local dataset_name = std.extVar("DATASET_NAME");  # Dynamic dataset for prompt selection
 local retrieval_corpus_name = std.extVar("CORPUS_NAME");  # Dynamic corpus based on dataset
 local retrieval_count = 10;  # Final top-K after reranking
 local max_buffer_count = 20;  # Number of docs to retrieve before reranking
@@ -33,7 +34,7 @@ local max_buffer_count = 20;  # Number of docs to retrieve before reranking
         "answer_main_question": {
             "name": "llmqa",
             "next_model": null,
-            "prompt_file": "prompts/squad/gold_with_2_distractors_context_direct_qa_flan_t5.txt",
+            "prompt_file": "prompts/" + dataset_name + "/gold_with_2_distractors_context_direct_qa_flan_t5.txt",
             "question_prefix": "Answer the following question.\n",
             "prompt_reader_args": {
                 "shuffle": false,

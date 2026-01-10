@@ -1,0 +1,21 @@
+Task: Answer the complex question based on the Investigation Log and Retrieved Documents.
+
+*** LOGICAL BLUEPRINT ***
+{logical_plan}
+
+*** INVESTIGATION LOG ***
+{investigation_log}
+
+*** RETRIEVED DOCUMENTS ***
+{context_str}
+
+*** INSTRUCTIONS ***
+1. Follow the Logical Blueprint to synthesize the answer. Complete ALL reasoning steps.
+2. Provide a single entity or short phrase as the answer.
+
+*** QUESTION ***
+{query}
+
+*** FORMAT ***
+Thought: <analysis>
+Answer: <concise answer>
