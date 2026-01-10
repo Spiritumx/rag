@@ -149,12 +149,40 @@ def _generate_logical_plan(query: str, llm_url: str, dataset_name: str) -> str:
     try:
         resp = requests.get(
             llm_url,
-            params={'prompt': prompt, 'max_length': 64, 'temperature': 0.1},
+            params={'prompt': prompt, 'max_length': 256, 'temperature': 0.1},
             timeout=60  # 增加超时到60秒
         )
-        plan = _extract_llm_text(resp.json()).split('\n')[0].strip()
+        llm_output = _extract_llm_text(resp.json()).strip()
+
+        # 🔧 鲁棒解析：跳过引导性废话，提取实际的逻辑路径
+        # 查找包含 "->" 的行（这是逻辑路径的标志）
+        lines = llm_output.split('\n')
+        for line in lines:
+            line = line.strip()
+            if '->' in line and not any(skip in line.lower() for skip in [
+                'convert', 'break it down', 'step by step', 'logical path',
+                "here's", "let me", "i'll", "to answer"
+            ]):
+                plan = line
+                print(f"  [Logic] Plan: {plan}")
+                return plan
+
+        # 如果没找到标准格式，取第一个非空行（去掉引导性句子）
+        for line in lines:
+            line = line.strip()
+            if line and not any(skip in line.lower() for skip in [
+                'convert', 'break it down', 'step by step',
+                "here's the", "here is the", "let me", "i'll"
+            ]):
+                plan = line
+                print(f"  [Logic] Plan: {plan}")
+                return plan
+
+        # 最后兜底：返回整个输出的第一行
+        plan = lines[0].strip() if lines else "Decompose the question step by step."
         print(f"  [Logic] Plan: {plan}")
         return plan
+
     except Exception as e:  # 🔧 修复：只捕获 Exception，不捕获系统异常
         print(f"  [Logic] Failed to generate plan: {e}")
         return "Decompose the question step by step."
