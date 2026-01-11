@@ -47,7 +47,7 @@ data:
 # Action mapping
 actions:
   Z: "zero_retrieval"          # Zero retrieval (direct LLM)
-  S-Sparse: "single_bm25"       # Single-hop BM25
+  S-Sparse: "single_splade"     # Single-hop SPLADE
   S-Dense: "single_hnsw"        # Single-hop HNSW (dense)
   S-Hybrid: "single_hybrid"     # Single-hop Hybrid
   M: "multi_hop_tot"            # Multi-hop with Tree-of-Thought (Innovation 3)

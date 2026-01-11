@@ -23,7 +23,7 @@ class ActionConfigMapperV2:
 
         Action mapping:
         - Z (Zero retrieval): Direct generation, no retrieval
-        - S-Sparse (Single BM25): Single-hop with BM25 retrieval
+        - S-Sparse (Single SPLADE): Single-hop with SPLADE retrieval
         - S-Dense (Single HNSW): Single-hop with dense retrieval
         - S-Hybrid (Single Hybrid): Single-hop with ADAPTIVE hybrid retrieval (Innovation 1)
         - M (Multi-hop): MI-RA-ToT reasoning (Innovation 3)
@@ -41,7 +41,7 @@ class ActionConfigMapperV2:
         # V2 configs use same names as baseline for compatibility
         mapping = {
             'Z': 'zero_retrieval.jsonnet',
-            'S-Sparse': 'single_bm25.jsonnet',
+            'S-Sparse': 'single_splade.jsonnet',
             'S-Dense': 'single_dense.jsonnet',
             'S-Hybrid': 'single_hybrid.jsonnet',  # Uses port 8002 with adaptive weights
             'M': 'multi_hop.jsonnet',  # MI-RA-ToT handled in stage2_generate_v2.py
@@ -72,7 +72,7 @@ class ActionConfigMapperV2:
         """
         return [
             'zero_retrieval.jsonnet',
-            'single_bm25.jsonnet',
+            'single_splade.jsonnet',
             'single_dense.jsonnet',
             'single_hybrid.jsonnet',
             'multi_hop.jsonnet',

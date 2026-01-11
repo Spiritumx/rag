@@ -1,7 +1,6 @@
-# [V2 Config] Single-hop hybrid (BM25 + SPLADE + HNSW) retrieval config for Llama 3-8B
-# Action: S-Sparse - Hybrid retrieval with reranker (Port 8002)
-# Process: Each method retrieves 20 docs → merge → Reranker → Top-10
-# NOTE: Uses V2 retriever on port 8002 (same weights as baseline, no adaptation yet)
+# [V2 Config] Single-hop SPLADE retrieval config for Llama 3-8B
+# Action: S-Sparse - SPLADE sparse retrieval with reranker (Port 8002)
+# Process: SPLADE retrieves 20 docs → Reranker → Top-10
 
 local dataset_name = std.extVar("DATASET_NAME");  # Dynamic dataset for prompt selection
 local retrieval_corpus_name = std.extVar("CORPUS_NAME");  # Dynamic corpus based on dataset
@@ -15,7 +14,7 @@ local max_buffer_count = 20;  # Number of docs to retrieve before reranking
         "generate_titles": {
             "name": "retrieve_and_reset_paragraphs",
             "next_model": "generate_main_question",
-            "retrieval_type": "hybrid",
+            "retrieval_type": "splade",
             "retriever_host": std.extVar("RETRIEVER_HOST"),
             "retriever_port": std.extVar("RETRIEVER_PORT"),
             "retrieval_count": retrieval_count,

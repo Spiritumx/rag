@@ -18,7 +18,7 @@ elif [ -d "model" ]; then
     echo "[WARNING] 'model' directory exists but is not a symlink. Skipping..."
 else
     echo "[INFO] Creating symlink to baseline models..."
-    ln -s ../../retriever_server/model model
+    ln -s ../../retriever_server/models model
     if [ $? -eq 0 ]; then
         echo "[SUCCESS] Model symlink created successfully"
     else
@@ -28,7 +28,7 @@ else
 fi
 
 # Verify baseline models exist
-BASELINE_MODELS="../../retriever_server/model"
+BASELINE_MODELS="../../retriever_server/models"
 if [ ! -d "$BASELINE_MODELS" ]; then
     echo "[WARNING] Baseline models not found at $BASELINE_MODELS"
     echo "          Please ensure baseline retriever models are downloaded first"
