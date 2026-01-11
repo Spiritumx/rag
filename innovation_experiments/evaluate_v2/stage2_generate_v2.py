@@ -80,6 +80,22 @@ class Stage2GeneratorV2:
         self.tot_mi_alpha = tot_config.get('mi_alpha', 0.7)
         self.tot_mi_beta = tot_config.get('mi_beta', 0.3)
 
+        # INNOVATION 3: Initialize ToT reranker for MI scoring
+        tot_reranker_model = tot_config.get('reranker_model')
+        tot_reranker_device = tot_config.get('reranker_device', 'cuda')
+
+        if tot_reranker_model:
+            try:
+                from sentence_transformers import CrossEncoder
+                self.tot_reranker = CrossEncoder(tot_reranker_model, device=tot_reranker_device)
+                print(f"[V2] ToT reranker loaded: {tot_reranker_model}")
+            except Exception as e:
+                print(f"[V2] Failed to load ToT reranker: {e}")
+                self.tot_reranker = None
+        else:
+            self.tot_reranker = None
+            print("[V2] ToT reranker not configured, using simple scoring")
+
         print(f"[V2] ToT parameters: beam_width={self.tot_beam_width}, max_depth={self.tot_max_depth}")
 
     def run(self, datasets=None):
@@ -274,6 +290,7 @@ class Stage2GeneratorV2:
                     max_depth=self.tot_max_depth,
                     mi_alpha=self.tot_mi_alpha,
                     mi_beta=self.tot_mi_beta,
+                    reranker_model=self.tot_reranker,
                 )
 
                 # Log routing decision (M strategy never cascades)
@@ -435,6 +452,7 @@ class Stage2GeneratorV2:
                         max_depth=self.tot_max_depth,
                         mi_alpha=self.tot_mi_alpha,
                         mi_beta=self.tot_mi_beta,
+                        reranker_model=self.tot_reranker,
                     )
 
                     final_predictions[qid] = tot_result['answer']

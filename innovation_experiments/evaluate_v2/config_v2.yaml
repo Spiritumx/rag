@@ -108,6 +108,10 @@ innovations:
     mi_beta: 0.3   # Weight for novelty component (0-1)
     # Formula: MI_gain = α × relevance(doc, question) + β × novelty(doc, context)
 
+    # Reranker for MI scoring (optional, uses simple scoring if not provided)
+    reranker_model: "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    reranker_device: "cuda"
+
     # Termination criteria
     min_confidence_to_answer: 0.7  # Minimum confidence to stop searching
     allow_early_termination: true  # Stop if high-confidence answer found

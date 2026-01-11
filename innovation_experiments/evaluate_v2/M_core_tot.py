@@ -691,6 +691,7 @@ def execute_tot_multihop(
     max_depth: int = 4,
     mi_alpha: float = 0.7,
     mi_beta: float = 0.3,
+    reranker_model=None,
 ) -> dict:
     """
     Execute MI-RA-ToT multi-hop reasoning.
@@ -704,6 +705,7 @@ def execute_tot_multihop(
         max_depth: Max tree depth (default 4)
         mi_alpha: Relevance weight (default 0.7)
         mi_beta: Novelty weight (default 0.3)
+        reranker_model: Optional reranker for MI scoring (default None)
 
     Returns:
         Dict with 'answer', 'chain', 'contexts'
@@ -716,6 +718,7 @@ def execute_tot_multihop(
         max_depth=max_depth,
         mi_alpha=mi_alpha,
         mi_beta=mi_beta,
+        reranker_model=reranker_model,
     )
 
     result = tot_searcher.search(query)
