@@ -16,7 +16,9 @@ from collections import defaultdict
 from typing import Dict, List, Optional
 
 # Add paths for imports
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, base_dir)  # For 'from evaluate.utils...'
+sys.path.insert(0, os.path.join(base_dir, 'innovation_experiments'))  # For 'from evaluate_v2...'
 
 from evaluate.utils.config_loader import ConfigLoader
 from evaluate.utils.data_loader import DataLoader
