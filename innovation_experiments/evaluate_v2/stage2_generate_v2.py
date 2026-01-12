@@ -27,7 +27,7 @@ from evaluate.utils.data_loader import DataLoader
 from evaluate.configs.action_to_config_mapping import ActionConfigMapper
 
 # Import V2-specific utilities
-from evaluate_v2.utils.result_manager import ResultManager
+from evaluate_v2.utils.result_manager_v2 import ResultManagerV2
 from evaluate_v2.utils.confidence_verifier import ConfidenceVerifier
 from evaluate_v2.utils.routing_logger import RoutingLogger
 
@@ -49,7 +49,7 @@ class Stage2GeneratorV2:
     def __init__(self, config):
         self.config = config
         self.data_loader = DataLoader(config)
-        self.result_manager = ResultManager(config)
+        self.result_manager = ResultManagerV2(config)
         self.config_mapper = ActionConfigMapper(config)
 
         # INNOVATION 2: Initialize confidence verifier
