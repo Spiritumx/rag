@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python evaluate/upper_bound_analysis/config_helper.py:*)"
+      "Bash(python evaluate/upper_bound_analysis/config_helper.py:*)",
+      "Bash(for file in \"D:/code/graduate/graduateRAG/processed_data\"/*/\"dev_500_subsampled.jsonl\")",
+      "Bash(find:*)",
+      "Bash(python3:*)"
     ]
   }
 }

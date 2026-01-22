@@ -1,0 +1,63 @@
+# Adaptive-RAG Evaluation Pipeline Configuration
+
+# Classifier settings (Adaptive-RAG trained model)
+classifier:
+  base_model_path: "/root/autodl-tmp/model/Qwen2.5-3B-Instruct"
+  lora_adapter_path: "/root/autodl-tmp/output/Qwen2.5-3B-Adaptive-RAG-Router/lora_model"
+  max_seq_length: 2048
+  temperature: 0.01
+  max_new_tokens: 256
+  device: "cuda"
+
+# LLM settings (Llama 3-8B)
+llm:
+  model_name: "meta-llama/Meta-Llama-3-8B-Instruct"
+  model_path: "/root/autodl-tmp/model/Meta-Llama-3-8B-Instruct"
+  server_host: "localhost"
+  server_port: 8000
+  max_length: 200
+  temperature: 1.0
+  auto_start_server: false
+
+# Retriever settings
+retriever:
+  host: "localhost"
+  port: 8001
+  timeout: 30
+  max_retries: 10
+
+# Datasets to process
+datasets:
+  - squad
+  - hotpotqa
+  - trivia
+  - nq
+  - musique
+  - 2wikimultihopqa
+
+# Data paths
+data:
+  base_path: "processed_data"
+  test_file: "test_subsampled.jsonl"
+
+# Action mapping (Adaptive-RAG uses Z, S, M)
+actions:
+  Z: "zero_retrieval"
+  S: "single_bm25"
+  M: "multi_hop"
+
+# Output paths
+outputs:
+  stage1_dir: "adaptive_rag/evaluate/outputs/stage1_classifications"
+  stage2_dir: "adaptive_rag/evaluate/outputs/stage2_predictions"
+  stage3_dir: "adaptive_rag/evaluate/outputs/stage3_metrics"
+  analysis_dir: "adaptive_rag/evaluate/outputs/analysis"
+
+# Execution settings
+execution:
+  batch_size: 16
+  checkpoint_frequency: 5
+  resume: false
+  service_check: true
+  log_file: "adaptive_rag/evaluate/pipeline.log"
+  parallel_threads: 12

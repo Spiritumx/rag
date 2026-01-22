@@ -1,0 +1,131 @@
+# Adaptive-RAG Configuration
+# 结果导向数据标注 + 训练分类器 + 评估
+
+# LLM 服务配置
+llm:
+  host: "localhost"
+  port: 8000
+  max_length: 200
+  temperature: 0.1
+  timeout: 60
+
+# 检索服务配置
+retriever:
+  host: "localhost"
+  port: 8001
+  timeout: 30
+  max_hits: 8
+  max_buffer: 40
+
+# 数据集配置
+datasets:
+  - squad
+  - hotpotqa
+  - trivia
+  - nq
+  - musique
+  - 2wikimultihopqa
+
+# Corpus 映射 (数据集 -> 检索语料库)
+corpus_mapping:
+  hotpotqa: hotpotqa
+  musique: musique
+  2wikimultihopqa: 2wikimultihopqa
+  squad: wiki
+  trivia: wiki
+  nq: wiki
+
+# 数据路径配置
+data:
+  # 原始数据路径
+  base_path: "processed_data"
+  dev_file: "dev_500_subsampled.jsonl"
+
+  # 采样配置
+  total_samples: 1000
+  samples_per_dataset: 167  # 1000 / 6 ≈ 167
+
+  # 输出路径
+  sampled_questions_path: "adaptive_rag/data/training_data/sampled_questions.jsonl"
+  training_data_path: "adaptive_rag/data/training_data/adaptive_rag_training.jsonl"
+
+# 标注配置
+labeling:
+  # 并行处理
+  parallel_workers: 8
+  batch_size: 10
+
+  # 策略标签
+  labels:
+    - "Z"         # Zero Retrieval - 直接 LLM 回答
+    - "S"         # Single Retrieval - BM25 检索 + LLM
+    - "M"         # Multi-hop - 多次检索
+
+  # 检查点配置
+  checkpoint_frequency: 50
+  checkpoint_path: "adaptive_rag/data/training_data/labeling_checkpoint.json"
+
+# 训练配置
+training:
+  # 模型路径
+  base_model_path: "/root/autodl-tmp/model/Qwen2.5-3B-Instruct"
+  output_dir: "/root/autodl-tmp/output/Qwen2.5-3B-Adaptive-RAG-Router"
+
+  # LoRA 配置
+  lora:
+    r: 16
+    alpha: 16
+    dropout: 0
+    target_modules:
+      - q_proj
+      - k_proj
+      - v_proj
+      - o_proj
+      - gate_proj
+      - up_proj
+      - down_proj
+
+  # 训练超参数
+  hyperparams:
+    max_seq_length: 2048
+    batch_size: 4
+    gradient_accumulation_steps: 8
+    warmup_steps: 20
+    num_epochs: 2
+    learning_rate: 0.0001
+    weight_decay: 0.01
+    lr_scheduler: "cosine"
+
+  # 保存配置
+  save_strategy: "steps"
+  eval_strategy: "steps"
+  eval_steps: 50
+  save_steps: 50
+  save_total_limit: 2
+
+# 评估配置
+evaluation:
+  # 分类器配置 (指向新训练的 LoRA)
+  classifier:
+    base_model_path: "/root/autodl-tmp/model/Qwen2.5-3B-Instruct"
+    lora_adapter_path: "/root/autodl-tmp/output/Qwen2.5-3B-Adaptive-RAG-Router/lora_model"
+    max_seq_length: 2048
+    temperature: 0.01
+    max_new_tokens: 256
+    device: "cuda"
+
+  # 测试数据
+  test_file: "test_subsampled.jsonl"
+
+  # 输出路径
+  outputs:
+    stage1_dir: "adaptive_rag/evaluate/outputs/stage1_classifications"
+    stage2_dir: "adaptive_rag/evaluate/outputs/stage2_predictions"
+    stage3_dir: "adaptive_rag/evaluate/outputs/stage3_metrics"
+
+# 执行配置
+execution:
+  batch_size: 16
+  checkpoint_frequency: 5
+  resume: false
+  parallel_threads: 12
