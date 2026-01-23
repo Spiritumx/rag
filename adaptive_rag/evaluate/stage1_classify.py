@@ -23,9 +23,11 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 # Reuse existing utils
 from evaluate.utils.config_loader import ConfigLoader
-from evaluate.utils.classifier_loader import ClassifierLoader
 from evaluate.utils.data_loader import DataLoader
 from evaluate.utils.result_manager import ResultManager
+
+# Use Adaptive-RAG specific classifier loader (Z/S/M only)
+from adaptive_rag.evaluate.adaptive_classifier_loader import AdaptiveClassifierLoader
 
 
 class AdaptiveStage1Classifier:
@@ -33,7 +35,7 @@ class AdaptiveStage1Classifier:
 
     def __init__(self, config):
         self.config = config
-        self.classifier_loader = ClassifierLoader(config)
+        self.classifier_loader = AdaptiveClassifierLoader(config)
         self.data_loader = DataLoader(config)
         self.result_manager = ResultManager(config)
 
@@ -121,12 +123,8 @@ class AdaptiveStage1Classifier:
                     batch_results = self.classifier_loader.classify_batch(batch_questions)
 
                     for item, classification in zip(batch_data, batch_results):
-                        # Normalize action for Adaptive-RAG
+                        # Action is already normalized to Z/S/M by AdaptiveClassifierLoader
                         action = classification['action']
-                        # Map any unexpected actions
-                        if action not in ['Z', 'S', 'M']:
-                            if action in ['S-Sparse', 'S-Dense']:
-                                action = 'S'
 
                         results[item['question_id']] = {
                             'question_id': item['question_id'],
@@ -160,10 +158,8 @@ class AdaptiveStage1Classifier:
                             classification = self.classifier_loader.classify_question(
                                 item['question_text']
                             )
+                            # Action is already normalized to Z/S/M
                             action = classification['action']
-                            if action not in ['Z', 'S', 'M']:
-                                if action in ['S-Sparse', 'S-Dense']:
-                                    action = 'S'
 
                             results[item['question_id']] = {
                                 'question_id': item['question_id'],

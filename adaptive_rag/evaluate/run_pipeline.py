@@ -11,6 +11,7 @@ Usage:
 import os
 import sys
 import time
+import shutil
 import argparse
 import requests
 from pathlib import Path
@@ -20,6 +21,74 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from evaluate.utils.config_loader import ConfigLoader
+
+
+def clean_outputs(config: dict, stages: list, datasets: list = None):
+    """Clean output files for specified stages and datasets."""
+    print("\n" + "="*60)
+    print("CLEANING OUTPUT FILES")
+    print("="*60)
+
+    stage1_dir = config['outputs']['stage1_dir']
+    stage2_dir = config['outputs']['stage2_dir']
+    stage3_dir = config['outputs']['stage3_dir']
+
+    if datasets is None:
+        datasets = config['datasets']
+
+    cleaned_count = 0
+
+    # Clean stage 1 outputs
+    if 1 in stages:
+        for dataset_name in datasets:
+            file_path = os.path.join(stage1_dir, f'{dataset_name}_classifications.jsonl')
+            if os.path.exists(file_path):
+                os.remove(file_path)
+                print(f"  Removed: {file_path}")
+                cleaned_count += 1
+
+    # Clean stage 2 outputs
+    if 2 in stages:
+        for dataset_name in datasets:
+            # Main predictions file
+            file_path = os.path.join(stage2_dir, f'{dataset_name}_predictions.json')
+            if os.path.exists(file_path):
+                os.remove(file_path)
+                print(f"  Removed: {file_path}")
+                cleaned_count += 1
+
+            # Chains file
+            chains_path = os.path.join(stage2_dir, f'{dataset_name}_predictions_chains.txt')
+            if os.path.exists(chains_path):
+                os.remove(chains_path)
+                print(f"  Removed: {chains_path}")
+                cleaned_count += 1
+
+            # Contexts file
+            contexts_path = os.path.join(stage2_dir, f'{dataset_name}_predictions_contexts.json')
+            if os.path.exists(contexts_path):
+                os.remove(contexts_path)
+                print(f"  Removed: {contexts_path}")
+                cleaned_count += 1
+
+    # Clean stage 3 outputs
+    if 3 in stages:
+        metrics_path = os.path.join(stage3_dir, 'overall_metrics.json')
+        if os.path.exists(metrics_path):
+            os.remove(metrics_path)
+            print(f"  Removed: {metrics_path}")
+            cleaned_count += 1
+
+        report_path = os.path.join(stage3_dir, 'detailed_report.txt')
+        if os.path.exists(report_path):
+            os.remove(report_path)
+            print(f"  Removed: {report_path}")
+            cleaned_count += 1
+
+    if cleaned_count == 0:
+        print("  No files to clean")
+    else:
+        print(f"\n  Cleaned {cleaned_count} files")
 
 
 def check_services(config: dict) -> bool:
@@ -103,6 +172,8 @@ def main():
                        help='Datasets to process (default: all in config)')
     parser.add_argument('--skip-service-check', action='store_true',
                        help='Skip service availability check')
+    parser.add_argument('--clean', action='store_true',
+                       help='Clean output files before running (remove old results)')
 
     args = parser.parse_args()
 
@@ -115,6 +186,10 @@ def main():
 
     # Load config
     config = ConfigLoader.load_config(args.config)
+
+    # Clean outputs if requested
+    if args.clean:
+        clean_outputs(config, args.stages, args.datasets)
 
     # Service check (if not skipped and running stages that need services)
     if not args.skip_service_check and (2 in args.stages):
