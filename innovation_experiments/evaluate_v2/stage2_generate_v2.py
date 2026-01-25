@@ -34,6 +34,9 @@ from evaluate_v2.utils.routing_logger import RoutingLogger
 # Import Innovation 3: MI-RA-ToT
 from evaluate_v2.M_core_tot import execute_tot_multihop
 
+# Import baseline M_core for ablation (Model B: w/o ToT)
+from evaluate.M_core import execute_real_multihop as execute_linear_multihop
+
 
 class Stage2GeneratorV2:
     """
@@ -75,10 +78,13 @@ class Stage2GeneratorV2:
 
         # Get ToT hyperparameters from config
         tot_config = innovations_config.get('tot_reasoning', {})
+        self.tot_enabled = tot_config.get('enabled', True)
         self.tot_beam_width = tot_config.get('beam_width', 3)
         self.tot_max_depth = tot_config.get('max_depth', 4)
         self.tot_mi_alpha = tot_config.get('mi_alpha', 0.7)
         self.tot_mi_beta = tot_config.get('mi_beta', 0.3)
+
+        print(f"[V2] ToT Reasoning: {'Enabled (beam search)' if self.tot_enabled else 'Disabled (linear M_core)'}")
 
         # INNOVATION 3: Initialize ToT reranker for MI scoring
         tot_reranker_model = tot_config.get('reranker_model')
@@ -252,7 +258,10 @@ class Stage2GeneratorV2:
         self, qids: list, test_data_map: dict, dataset_name: str
     ) -> dict:
         """
-        Process M strategy questions using MI-RA-ToT (Innovation 3).
+        Process M strategy questions using MI-RA-ToT or linear M_core.
+
+        If tot_enabled=True: Use MI-RA-ToT (beam search)
+        If tot_enabled=False: Use baseline linear M_core (for ablation Model B)
 
         Args:
             qids: List of question IDs
@@ -274,31 +283,48 @@ class Stage2GeneratorV2:
 
         # Get parallel threads
         parallel_threads = self.config.get('execution', {}).get('parallel_threads', 1)
-        print(f"  [M-ToT] Using {parallel_threads} parallel threads for beam search")
+
+        if self.tot_enabled:
+            print(f"  [M-ToT] Using MI-RA-ToT beam search with {parallel_threads} threads")
+            strategy_label = 'M-ToT'
+        else:
+            print(f"  [M-Linear] Using baseline linear M_core with {parallel_threads} threads")
+            strategy_label = 'M-Linear'
 
         # Define single question processing function
         def process_single_question(qid):
             question_text = test_data_map[qid]['question_text']
             try:
-                # INNOVATION 3: Use MI-RA-ToT instead of baseline greedy
-                result = execute_tot_multihop(
-                    query=question_text,
-                    retriever_config=retriever_config,
-                    llm_config=llm_config,
-                    dataset_name=dataset_name,
-                    beam_width=self.tot_beam_width,
-                    max_depth=self.tot_max_depth,
-                    mi_alpha=self.tot_mi_alpha,
-                    mi_beta=self.tot_mi_beta,
-                    reranker_model=self.tot_reranker,
-                )
+                if self.tot_enabled:
+                    # INNOVATION 3: Use MI-RA-ToT (beam search)
+                    result = execute_tot_multihop(
+                        query=question_text,
+                        retriever_config=retriever_config,
+                        llm_config=llm_config,
+                        dataset_name=dataset_name,
+                        beam_width=self.tot_beam_width,
+                        max_depth=self.tot_max_depth,
+                        mi_alpha=self.tot_mi_alpha,
+                        mi_beta=self.tot_mi_beta,
+                        reranker_model=self.tot_reranker,
+                    )
+                else:
+                    # ABLATION: Use baseline linear M_core
+                    result = execute_linear_multihop(
+                        query=question_text,
+                        retriever_host=retriever_config['host'],
+                        retriever_port=retriever_config['port'],
+                        llm_host=llm_config['host'],
+                        llm_port=llm_config['port'],
+                        dataset_name=dataset_name,
+                    )
 
                 # Log routing decision (M strategy never cascades)
                 self.routing_logger.log_decision(
                     question_id=qid,
                     initial_action='M',
                     confidence=1.0,  # M strategies are not verified
-                    final_action='M-ToT',
+                    final_action=strategy_label,
                     cascaded=False,
                     question_text=question_text,
                     dataset=dataset_name,
@@ -321,7 +347,8 @@ class Stage2GeneratorV2:
                 for qid in qids
             }
 
-            with tqdm(total=len(qids), desc="  MI-RA-ToT reasoning") as pbar:
+            progress_desc = "  MI-RA-ToT reasoning" if self.tot_enabled else "  Linear M reasoning"
+            with tqdm(total=len(qids), desc=progress_desc) as pbar:
                 for future in as_completed(future_to_qid):
                     qid, result, error = future.result()
 
@@ -438,33 +465,46 @@ class Stage2GeneratorV2:
             should_cascade = self.verifier.should_cascade(confidence, strategy=action)
 
             if should_cascade:
-                print(f"    [Cascade] {qid}: confidence={confidence:.3f} → Cascading to MI-RA-ToT")
+                cascade_target = 'M-ToT' if self.tot_enabled else 'M-Linear'
+                print(f"    [Cascade] {qid}: confidence={confidence:.3f} → Cascading to {cascade_target}")
                 cascade_count += 1
 
                 try:
-                    # INNOVATION 3: Cascade to MI-RA-ToT
-                    tot_result = execute_tot_multihop(
-                        query=question_text,
-                        retriever_config=retriever_config,
-                        llm_config=llm_config,
-                        dataset_name=dataset_name,
-                        beam_width=self.tot_beam_width,
-                        max_depth=self.tot_max_depth,
-                        mi_alpha=self.tot_mi_alpha,
-                        mi_beta=self.tot_mi_beta,
-                        reranker_model=self.tot_reranker,
-                    )
+                    # Cascade to M strategy (ToT or Linear based on config)
+                    if self.tot_enabled:
+                        # Use MI-RA-ToT (beam search)
+                        cascade_result = execute_tot_multihop(
+                            query=question_text,
+                            retriever_config=retriever_config,
+                            llm_config=llm_config,
+                            dataset_name=dataset_name,
+                            beam_width=self.tot_beam_width,
+                            max_depth=self.tot_max_depth,
+                            mi_alpha=self.tot_mi_alpha,
+                            mi_beta=self.tot_mi_beta,
+                            reranker_model=self.tot_reranker,
+                        )
+                    else:
+                        # Use baseline linear M_core (for ablation)
+                        cascade_result = execute_linear_multihop(
+                            query=question_text,
+                            retriever_host=retriever_config['host'],
+                            retriever_port=retriever_config['port'],
+                            llm_host=llm_config['host'],
+                            llm_port=llm_config['port'],
+                            dataset_name=dataset_name,
+                        )
 
-                    final_predictions[qid] = tot_result['answer']
-                    final_chains[qid] = f"[CASCADED from {action}]\n" + tot_result['chain']
-                    final_contexts[qid] = tot_result['contexts']
+                    final_predictions[qid] = cascade_result['answer']
+                    final_chains[qid] = f"[CASCADED from {action}]\n" + cascade_result['chain']
+                    final_contexts[qid] = cascade_result['contexts']
 
                     # Log cascade decision
                     self.routing_logger.log_decision(
                         question_id=qid,
                         initial_action=action,
                         confidence=confidence,
-                        final_action='M-ToT',
+                        final_action=cascade_target,
                         cascaded=True,
                         question_text=question_text,
                         dataset=dataset_name,

@@ -10,6 +10,7 @@ Analyzes queries to compute:
 import re
 from typing import Dict, List
 import logging
+import numpy as np
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -197,69 +198,77 @@ class QueryAnalyzer:
             'entities': entities  # For debugging
         }
 
-    def get_dynamic_weights(self, query: str) -> Dict[str, float]:
+    def get_dynamic_weights(self, query: str, temperature: float = 1.0) -> Dict[str, float]:
         """
-        Compute dynamic retrieval weights based on query analysis.
+        Compute dynamic retrieval weights based on query analysis using Temperature-scaled Softmax.
 
         Args:
             query: The input question/query string
+            temperature: Softmax temperature for weight smoothing (default: 1.0)
+                        - Higher temperature → more uniform weights
+                        - Lower temperature → more extreme weights
 
         Returns:
-            Dict with keys: bm25, splade, dense (weights sum to ~1.0)
+            Dict with keys: bm25, splade, dense (weights sum to 1.0)
 
-        Weight Logic:
-        - High lexical specificity (> 0.3) → Favor BM25/SPLADE (lexical methods)
-        - High semantic abstractness (> 0.8) → Favor Dense (semantic method)
-        - Moderate → Balanced weights
+        Weight Logic (Temperature-scaled Softmax):
+        - lexical_score drives sparse retrieval preference (BM25)
+        - semantic_score drives dense retrieval preference (Dense)
+        - SPLADE bridges both lexical and semantic characteristics
+
+        Formula:
+            logit_sparse = α × lexical_score
+            logit_dense  = α × semantic_score
+            logit_splade = (logit_sparse + logit_dense) / 2
+            weights = softmax([logit_sparse, logit_splade, logit_dense] / temperature)
         """
         analysis = self.analyze(query)
         lexical_score = analysis['lexical_score']
         semantic_score = analysis['semantic_score']
 
-        # Strategy 1: Entity-dense queries (high lexical_score)
-        if lexical_score > 0.3:
-            # Favor lexical methods
-            bm25_weight = 0.4
-            splade_weight = 0.4
-            dense_weight = 0.2
-            strategy = "entity-dense"
+        # Scaling factor for logits (controls sensitivity)
+        alpha = 2.0
 
-        # Strategy 2: Abstract queries (high semantic_score)
-        elif semantic_score > 0.8:
-            # Favor semantic method
-            bm25_weight = 0.1
-            splade_weight = 0.2
-            dense_weight = 0.7
-            strategy = "abstract-semantic"
+        # Build logits based on query characteristics
+        # - High lexical_score (entity-dense) → higher sparse logit
+        # - High semantic_score (abstract) → higher dense logit
+        logit_sparse = alpha * lexical_score   # BM25: favors entity-dense queries
+        logit_dense = alpha * semantic_score   # Dense: favors abstract/semantic queries
+        logit_splade = (logit_sparse + logit_dense) / 2  # SPLADE: balanced hybrid
 
-        # Strategy 3: Concrete but not entity-dense
-        elif semantic_score < 0.3:
-            # Lean toward lexical
-            bm25_weight = 0.35
-            splade_weight = 0.35
-            dense_weight = 0.3
-            strategy = "concrete-lexical"
+        # Apply temperature-scaled softmax
+        logits = np.array([logit_sparse, logit_splade, logit_dense])
+        scaled_logits = logits / temperature
+        exp_logits = np.exp(scaled_logits - np.max(scaled_logits))  # Numerical stability
+        softmax_weights = exp_logits / np.sum(exp_logits)
 
-        # Strategy 4: Balanced/moderate
-        else:
-            # Balanced weights
-            bm25_weight = 0.33
-            splade_weight = 0.33
-            dense_weight = 0.34
-            strategy = "balanced"
+        bm25_weight = float(softmax_weights[0])
+        splade_weight = float(softmax_weights[1])
+        dense_weight = float(softmax_weights[2])
+
+        # Determine dominant strategy for logging
+        max_idx = np.argmax(softmax_weights)
+        strategy_names = ["lexical-dominant", "hybrid-balanced", "semantic-dominant"]
+        strategy = strategy_names[max_idx]
 
         weights = {
             'bm25': bm25_weight,
             'splade': splade_weight,
             'dense': dense_weight,
             'strategy': strategy,
-            'analysis': analysis
+            'analysis': analysis,
+            'logits': {
+                'sparse': float(logit_sparse),
+                'splade': float(logit_splade),
+                'dense': float(logit_dense)
+            }
         }
 
         logger.info(f"[QueryAnalyzer] Query: '{query[:60]}...'")
         logger.info(f"[QueryAnalyzer] Lexical: {lexical_score:.2f}, Semantic: {semantic_score:.2f}")
+        logger.info(f"[QueryAnalyzer] Logits: Sparse={logit_sparse:.2f}, SPLADE={logit_splade:.2f}, Dense={logit_dense:.2f}")
         logger.info(f"[QueryAnalyzer] Strategy: {strategy}")
-        logger.info(f"[QueryAnalyzer] Weights: BM25={bm25_weight:.2f}, SPLADE={splade_weight:.2f}, Dense={dense_weight:.2f}")
+        logger.info(f"[QueryAnalyzer] Weights: BM25={bm25_weight:.3f}, SPLADE={splade_weight:.3f}, Dense={dense_weight:.3f}")
 
         return weights
 
@@ -286,7 +295,8 @@ if __name__ == "__main__":
         print(f"\nQuery: {query}")
         weights = analyzer.get_dynamic_weights(query)
         print(f"  Strategy: {weights['strategy']}")
-        print(f"  Weights: BM25={weights['bm25']:.2f}, SPLADE={weights['splade']:.2f}, Dense={weights['dense']:.2f}")
+        print(f"  Logits: Sparse={weights['logits']['sparse']:.2f}, SPLADE={weights['logits']['splade']:.2f}, Dense={weights['logits']['dense']:.2f}")
+        print(f"  Weights: BM25={weights['bm25']:.3f}, SPLADE={weights['splade']:.3f}, Dense={weights['dense']:.3f}")
         print(f"  Analysis: Lexical={weights['analysis']['lexical_score']:.2f}, Semantic={weights['analysis']['semantic_score']:.2f}")
         if weights['analysis']['entities']:
             print(f"  Entities: {weights['analysis']['entities']}")
