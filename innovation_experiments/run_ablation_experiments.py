@@ -167,7 +167,7 @@ def compare_results(experiments: list, output_base: str):
 
     for exp_id in experiments:
         exp_name = EXPERIMENT_CONFIGS[exp_id]['name']
-        metrics_path = os.path.join(output_base, exp_name, 'stage3_metrics', 'overall_metrics.json')
+        metrics_path = os.path.join(output_base, exp_name, 'stage3_metrics', 'overall_metrics_v2.json')
 
         if os.path.exists(metrics_path):
             with open(metrics_path, 'r', encoding='utf-8') as f:
