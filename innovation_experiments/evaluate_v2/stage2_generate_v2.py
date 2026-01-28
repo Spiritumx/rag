@@ -312,10 +312,8 @@ class Stage2GeneratorV2:
                     # ABLATION: Use baseline linear M_core
                     result = execute_linear_multihop(
                         query=question_text,
-                        retriever_host=retriever_config['host'],
-                        retriever_port=retriever_config['port'],
-                        llm_host=llm_config['host'],
-                        llm_port=llm_config['port'],
+                        retriever_config=retriever_config,
+                        llm_config=llm_config,
                         dataset_name=dataset_name,
                     )
 
@@ -488,10 +486,8 @@ class Stage2GeneratorV2:
                         # Use baseline linear M_core (for ablation)
                         cascade_result = execute_linear_multihop(
                             query=question_text,
-                            retriever_host=retriever_config['host'],
-                            retriever_port=retriever_config['port'],
-                            llm_host=llm_config['host'],
-                            llm_port=llm_config['port'],
+                            retriever_config=retriever_config,
+                            llm_config=llm_config,
                             dataset_name=dataset_name,
                         )
 
@@ -596,13 +592,29 @@ class Stage2GeneratorV2:
                 '--output_file', output_file,
             ]
 
+            # Prepare environment with retriever config (CRITICAL for ablation experiments)
+            env = os.environ.copy()
+            env['RETRIEVER_HOST'] = str(self.config['retriever']['host'])
+            env['RETRIEVER_PORT'] = str(self.config['retriever']['port'])
+            env['DATASET_NAME'] = dataset_name
+
+            # Map dataset to corpus name
+            dataset_to_corpus = {
+                'hotpotqa': 'hotpotqa', 'musique': 'musique',
+                '2wikimultihopqa': '2wikimultihopqa', 'iirc': 'iirc',
+                'squad': 'wiki', 'trivia': 'wiki', 'nq': 'wiki'
+            }
+            env['CORPUS_NAME'] = dataset_to_corpus.get(dataset_name.lower(), 'wiki')
+
             # Run inference
             print(f"    Running inference with config: {config_path}")
+            print(f"    Retriever: {env['RETRIEVER_HOST']}:{env['RETRIEVER_PORT']}, Corpus: {env['CORPUS_NAME']}")
             result = subprocess.run(
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=3600  # 1 hour timeout
+                timeout=3600,  # 1 hour timeout
+                env=env  # Pass environment variables to subprocess
             )
 
             if result.returncode != 0:

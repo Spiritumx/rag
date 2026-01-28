@@ -220,6 +220,7 @@ class MutualInformationScorer:
     def calculate_novelty(self, new_doc: Dict, existing_contexts: List[Dict]) -> float:
         """
         Calculate novelty of new document w.r.t. existing contexts.
+        改进：考虑标题（实体）级别的新颖性。
 
         Args:
             new_doc: New document to score
@@ -231,13 +232,19 @@ class MutualInformationScorer:
         if not existing_contexts:
             return 1.0  # First document is always novel
 
+        new_title = new_doc.get('title', '').lower()
         new_text = new_doc.get('paragraph_text', '').lower()
         new_tokens = set(new_text.split())
 
         if not new_tokens:
             return 0.0
 
-        max_similarity = 0.0
+        # 检查标题（实体）是否已经出现过
+        existing_titles = {doc.get('title', '').lower() for doc in existing_contexts}
+        title_is_new = new_title not in existing_titles and new_title != ''
+
+        # 计算内容重叠
+        max_content_similarity = 0.0
         for old_doc in existing_contexts:
             old_text = old_doc.get('paragraph_text', '').lower()
             old_tokens = set(old_text.split())
@@ -251,10 +258,14 @@ class MutualInformationScorer:
 
             if len(union) > 0:
                 similarity = len(intersection) / len(union)
-                max_similarity = max(max_similarity, similarity)
+                max_content_similarity = max(max_content_similarity, similarity)
 
-        # Novelty = 1 - max_similarity
-        novelty = 1.0 - max_similarity
+        # 组合评分：标题新颖性 + 内容新颖性
+        content_novelty = 1.0 - max_content_similarity
+        title_novelty = 1.0 if title_is_new else 0.3  # 新实体给高分
+
+        # 加权组合：标题占 40%，内容占 60%
+        novelty = 0.4 * title_novelty + 0.6 * content_novelty
         return novelty
 
     def calculate_mi_gain(
@@ -352,6 +363,47 @@ class BeamSearchToT:
         # State tracking
         self.executed_queries: Set[str] = set()
         self.reasoning_chain: List[str] = []
+        self.logical_plan: str = ""  # 添加逻辑规划
+
+    def _generate_logical_plan(self, question: str) -> str:
+        """
+        生成逻辑规划来指导 ToT 搜索方向。
+        借鉴基线 M_core 的逻辑规划方法。
+        """
+        prompt = f"""Decompose this question into a logical search plan.
+Output a chain of entities/concepts to find, connected by "->".
+
+Question: {question}
+
+Example outputs:
+- "Who directed the movie starring Tom Hanks about WWII?" -> "Tom Hanks WWII movie -> movie director"
+- "What is the capital of the country where Einstein was born?" -> "Einstein birthplace -> country capital"
+
+Logical Plan:"""
+
+        try:
+            response = requests.get(
+                self.llm_url,
+                params={'prompt': prompt, 'max_length': 128, 'temperature': 0.1},
+                timeout=60
+            )
+            raw_output = _extract_llm_text(response.json()).strip()
+
+            # 提取包含 "->" 的行
+            for line in raw_output.split('\n'):
+                line = line.strip()
+                if '->' in line:
+                    self.reasoning_chain.append(f"[ToT Logic] Plan: {line}")
+                    return line
+
+            # 如果没有找到，返回简单的规划
+            plan = raw_output.split('\n')[0].strip() if raw_output else "Find key entities step by step"
+            self.reasoning_chain.append(f"[ToT Logic] Plan: {plan}")
+            return plan
+
+        except Exception as e:
+            logger.warning(f"Failed to generate logical plan: {e}")
+            return "Find key entities step by step"
 
     def _retrieve_documents(self, query: str, max_hits: int = 5) -> List[Dict]:
         """Execute retrieval for a query."""
@@ -384,6 +436,7 @@ class BeamSearchToT:
     ) -> List[str]:
         """
         Generate k candidate next-step queries from a node.
+        使用逻辑规划指导查询生成，提高候选质量。
 
         Args:
             question: Original question
@@ -396,39 +449,62 @@ class BeamSearchToT:
         # Build context from path
         path = node.get_path_to_root()
         history_str = "\n".join([
-            f"Step {i}: {n.thought[:100]}..." for i, n in enumerate(path) if n.thought
-        ]) if len(path) > 1 else "None"
+            f"Step {i}: Searched '{n.query}' -> Found: {[c.get('title', '')[:30] for c in n.contexts[:2]]}"
+            for i, n in enumerate(path) if n.query and n.depth > 0
+        ]) if len(path) > 1 else "None yet"
 
-        # Get recent contexts
+        # Get recent contexts with key information
         all_contexts = node.get_all_contexts()
         context_snippets = [
-            f"Title: {c['title']}\nContent: {c.get('paragraph_text', '')[:150]}..."
-            for c in all_contexts[:3]
+            f"[{c['title']}]: {c.get('paragraph_text', '')[:200]}"
+            for c in all_contexts[:5]
         ]
-        context_str = "\n---\n".join(context_snippets) if context_snippets else "No context yet."
+        context_str = "\n".join(context_snippets) if context_snippets else "No context yet."
 
-        prompt = f"""You are an expert research agent exploring multiple reasoning paths.
-Generate {k} DIFFERENT next search queries to find the answer.
+        # 提取已发现的实体（用于指导下一步搜索）
+        found_entities = set()
+        for ctx in all_contexts[:5]:
+            title = ctx.get('title', '')
+            if title:
+                found_entities.add(title)
+        found_str = ", ".join(list(found_entities)[:5]) if found_entities else "None"
 
-Question: {question}
+        prompt = f"""You are solving a multi-hop question by searching for information step by step.
 
-Past Steps:
+*** LOGICAL PLAN ***
+{self.logical_plan}
+
+*** QUESTION ***
+{question}
+
+*** SEARCH HISTORY ***
 {history_str}
 
-Current Info:
+*** FOUND ENTITIES ***
+{found_str}
+
+*** CURRENT KNOWLEDGE ***
 {context_str}
 
-*** RULES ***
-1. Generate {k} diverse search queries (keywords only, not questions)
-2. Each query should explore a different aspect
-3. Output format: "Query 1: ...\nQuery 2: ...\nQuery 3: ..."
+*** TASK ***
+Based on the logical plan and what you've found, generate {k} different search queries for the NEXT step.
+Each query should:
+1. Follow the logical plan's direction
+2. Search for MISSING information not yet found
+3. Be specific keywords (not questions), 2-5 words
+
+*** OUTPUT FORMAT ***
+Query 1: <keywords>
+Query 2: <keywords>
+Query 3: <keywords>
 
 Output:"""
 
         try:
+            # 使用较低的 temperature 提高查询质量
             response = requests.get(
                 self.llm_url,
-                params={'prompt': prompt, 'max_length': 128, 'temperature': 0.7},  # Higher temp for diversity
+                params={'prompt': prompt, 'max_length': 150, 'temperature': 0.3},
                 timeout=60
             )
             raw_output = _extract_llm_text(response.json())
@@ -445,23 +521,44 @@ Output:"""
                         if len(candidates) >= k:
                             break
 
-            # Fallback: If not enough candidates, generate simple variations
+            # 改进的 Fallback：基于逻辑规划和已有实体生成
             if len(candidates) < k:
-                logger.warning(f"Only generated {len(candidates)}/{k} candidates, using fallback")
-                # Simple fallback: Reuse last query with minor variations (not ideal, but prevents failure)
+                logger.warning(f"Only generated {len(candidates)}/{k} candidates, using smart fallback")
+
+                # 从逻辑规划中提取未搜索的步骤
+                plan_parts = self.logical_plan.split('->')
+                for part in plan_parts:
+                    part = part.strip().lower()
+                    if part and not _is_semantically_similar(part, self.executed_queries):
+                        candidates.append(part)
+                        if len(candidates) >= k:
+                            break
+
+                # 如果还不够，组合已有实体
+                if len(candidates) < k and found_entities:
+                    for entity in found_entities:
+                        combo_query = f"{entity} {question.split()[0]}"
+                        if not _is_semantically_similar(combo_query.lower(), self.executed_queries):
+                            candidates.append(combo_query.lower())
+                            if len(candidates) >= k:
+                                break
+
+                # 最后兜底
                 while len(candidates) < k:
-                    candidates.append(candidates[0] if candidates else question[:30])
+                    candidates.append(question[:30].lower())
 
             return candidates[:k]
 
         except Exception as e:
             logger.error(f"Failed to generate candidate queries: {e}")
-            # Emergency fallback
-            return [question[:30]] * k
+            # Emergency fallback based on logical plan
+            plan_parts = [p.strip() for p in self.logical_plan.split('->') if p.strip()]
+            return (plan_parts + [question[:30].lower()])[:k]
 
     def _can_answer_question(self, node: TreeNode, question: str) -> bool:
         """
         Check if current node has enough information to answer.
+        使用更智能的终止条件。
 
         Args:
             node: Current node
@@ -478,8 +575,25 @@ Output:"""
         if node.depth >= self.max_depth - 1:
             return True  # Force answer at max depth
 
-        # Simple heuristic: Can answer if have enough context
-        return len(all_contexts) >= 5
+        # 检查是否覆盖了逻辑规划中的关键步骤
+        if self.logical_plan:
+            plan_parts = [p.strip().lower() for p in self.logical_plan.split('->')]
+            covered_parts = 0
+            context_text = " ".join([c.get('paragraph_text', '').lower() for c in all_contexts])
+
+            for part in plan_parts:
+                # 简单检查：规划中的关键词是否出现在上下文中
+                part_words = set(part.split())
+                if part_words and len(part_words.intersection(set(context_text.split()))) >= len(part_words) // 2:
+                    covered_parts += 1
+
+            # 如果覆盖了大部分规划步骤，可以尝试回答
+            if len(plan_parts) > 0 and covered_parts >= len(plan_parts) * 0.7:
+                logger.info(f"[ToT] Plan coverage: {covered_parts}/{len(plan_parts)}, ready to answer")
+                return True
+
+        # Fallback: 足够的上下文数量
+        return len(all_contexts) >= 6
 
     def search(self, question: str) -> Dict:
         """
@@ -495,8 +609,13 @@ Output:"""
         self.reasoning_chain.append(f"[ToT] Question: {question}")
         self.reasoning_chain.append(f"[ToT] Beam Width: {self.beam_width}, Max Depth: {self.max_depth}")
 
+        # Step 0: 生成逻辑规划（关键改进）
+        logger.info("[ToT] Step 0: Generating logical plan...")
+        self.logical_plan = self._generate_logical_plan(question)
+        logger.info(f"[ToT] Logical Plan: {self.logical_plan}")
+
         # Initialize root node with initial retrieval
-        logger.info("[ToT] Step 0: Initial retrieval...")
+        logger.info("[ToT] Step 1: Initial retrieval...")
         initial_hits = self._retrieve_documents(question, max_hits=8)
         self.executed_queries.add(question.lower())
 

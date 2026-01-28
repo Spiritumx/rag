@@ -229,7 +229,10 @@ def compare_results(experiments: list, output_base: str):
     print("\n📊 按数据集对比 EM:")
     datasets = set()
     for m in all_metrics.values():
-        datasets.update(m.get('by_dataset', {}).keys())
+        # 数据集是顶层键，排除 'overall'
+        for key in m.keys():
+            if key != 'overall':
+                datasets.add(key)
 
     if datasets:
         print("-"*90)
@@ -245,7 +248,9 @@ def compare_results(experiments: list, output_base: str):
                 exp_name = EXPERIMENT_CONFIGS[exp_id]['name']
                 row = f"{exp_name:<20}"
                 for ds in sorted(datasets):
-                    em = m.get('by_dataset', {}).get(ds, {}).get('em', 0)
+                    # 数据集直接是顶层键，其中包含 overall
+                    ds_metrics = m.get(ds, {})
+                    em = ds_metrics.get('overall', {}).get('em', 0)
                     row += f" {em:<12.4f}"
                 print(row)
 

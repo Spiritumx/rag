@@ -97,16 +97,25 @@ innovations:
     enabled: true
 
     # Beam search parameters
-    beam_width: 3  # Number of paths to keep per layer (B)
-    max_depth: 4   # Maximum reasoning depth (layers)
+    # beam_width: 路径数量，增大可提高召回但增加计算量
+    # 推荐: 2-4，复杂问题用 4，简单问题用 2
+    beam_width: 4
+
+    # max_depth: 最大搜索深度
+    # 推荐: 3-5，musique/2wikimqa 等复杂数据集用 5
+    max_depth: 4
 
     # Query expansion parameters
-    candidates_per_node: 3  # k: Number of next-step queries per node
+    # candidates_per_node: 每个节点生成的候选查询数
+    # 推荐: 2-3，太多会增加噪声
+    candidates_per_node: 3
 
     # Mutual Information scoring
-    mi_alpha: 0.7  # Weight for relevance component (0-1)
-    mi_beta: 0.3   # Weight for novelty component (0-1)
-    # Formula: MI_gain = α × relevance(doc, question) + β × novelty(doc, context)
+    # mi_alpha: 相关性权重 (文档与问题的相关程度)
+    # mi_beta: 新颖性权重 (文档带来的新信息)
+    # 推荐: 相关性优先 (0.6-0.8)，新颖性为辅 (0.2-0.4)
+    mi_alpha: 0.65  # 略微降低，给新颖性更多空间
+    mi_beta: 0.35   # 略微增加，鼓励探索新实体
 
     # Reranker for MI scoring (optional, uses simple scoring if not provided)
     reranker_model: "cross-encoder/ms-marco-MiniLM-L-6-v2"
@@ -120,7 +129,11 @@ innovations:
     max_total_retrievals: 20  # Maximum retrieval operations per question
     retrieval_timeout: 120     # Seconds per retrieval operation
 
-    description: "Beam search with MI-based path scoring and pruning"
+    # 查询生成温度 (新增)
+    # 推荐: 0.2-0.4，太高会生成无意义查询
+    query_temperature: 0.3
+
+    description: "Beam search with MI-based path scoring, logical planning, and entity-aware novelty"
 
 # ============================================================================
 # DATASET-SPECIFIC OVERRIDES (Optional)
