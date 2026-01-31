@@ -71,11 +71,15 @@ class RoutingLogger:
             self.statistics["total_cascaded"] += 1
             self.statistics[f"cascaded_from_{initial_action}"] += 1
 
-        # Log to console
-        cascade_marker = "→ CASCADED" if cascaded else "→ DIRECT"
-        logger.info(
-            f"[Routing] {question_id} | {initial_action} {cascade_marker} {final_action} | Confidence: {confidence:.3f}"
-        )
+        # Log to console (only cascade decisions at INFO, rest at DEBUG)
+        if cascaded:
+            logger.info(
+                f"[Cascade] {question_id} | {initial_action} → {final_action} | Confidence: {confidence:.3f}"
+            )
+        else:
+            logger.debug(
+                f"[Routing] {question_id} | {initial_action} → {final_action} | Confidence: {confidence:.3f}"
+            )
 
     def save(self, output_path: str):
         """
