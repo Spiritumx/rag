@@ -8,8 +8,6 @@ Used to determine when to cascade from initial strategies to more robust MI-RA-T
 from typing import List, Dict, Optional
 import logging
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -66,11 +64,11 @@ class ConfidenceVerifier:
                 model_path = str(Path(model_path).resolve())
 
                 if not Path(model_path).is_dir():
-                    print(f"[ConfidenceVerifier] Model directory not found: {model_path}")
+                    logger.warning(f"Model directory not found: {model_path}")
                     self.model = None
                     return
 
-                print(f"[ConfidenceVerifier] Loading model from: {model_path} (device={self.device})")
+                logger.debug(f"Loading model from: {model_path} (device={self.device})")
                 tokenizer = AutoTokenizer.from_pretrained(model_path, local_files_only=True)
                 raw_model = AutoModelForSequenceClassification.from_pretrained(model_path, local_files_only=True)
                 raw_model.to(self.device)
@@ -99,11 +97,9 @@ class ConfidenceVerifier:
                         return logits.cpu().numpy()
 
                 self.model = _CrossEncoderCompat(raw_model, tokenizer, self.device)
-                print(f"[ConfidenceVerifier] Model loaded successfully")
+                logger.info("ConfidenceVerifier model loaded")
             except Exception as e:
-                print(f"[ConfidenceVerifier] Failed to load model: {e}")
-                import traceback
-                traceback.print_exc()
+                logger.warning(f"ConfidenceVerifier failed to load: {e}")
                 logger.warning("Confidence verification will be disabled")
                 self.model = None
 
@@ -128,15 +124,12 @@ class ConfidenceVerifier:
         """
         if self.model is None:
             # 模型未加载时，返回高置信度以跳过级联，避免所有问题被错误地全部级联
-            logger.warning("Confidence verifier model not loaded, returning high score 0.9 (skip cascade)")
             return 0.9 if not return_detailed else {"confidence": 0.9, "scores": []}
 
         if not contexts:
-            logger.warning("No contexts provided for verification, returning low confidence 0.0")
             return 0.0 if not return_detailed else {"confidence": 0.0, "scores": []}
 
         if not answer or len(answer.strip()) < 2:
-            logger.warning("Empty or very short answer, returning low confidence 0.0")
             return 0.0 if not return_detailed else {"confidence": 0.0, "scores": []}
 
         # Create QA pair for verification

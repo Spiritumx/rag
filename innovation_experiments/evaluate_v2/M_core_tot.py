@@ -12,8 +12,6 @@ from typing import List, Dict, Any, Set, Optional
 from dataclasses import dataclass, field
 import logging
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # ============================================================================
@@ -606,7 +604,7 @@ Output:"""
 
             # 如果覆盖了大部分规划步骤，可以尝试回答
             if len(plan_parts) > 0 and covered_parts >= len(plan_parts) * 0.7:
-                logger.info(f"[ToT] Plan coverage: {covered_parts}/{len(plan_parts)}, ready to answer")
+                logger.debug(f"[ToT] Plan coverage: {covered_parts}/{len(plan_parts)}, ready to answer")
                 return True
 
         # Fallback: 足够的上下文数量
@@ -622,17 +620,17 @@ Output:"""
         Returns:
             Dict with 'answer', 'chain', 'contexts'
         """
-        logger.info(f"[ToT] Starting beam search for: {question[:60]}...")
+        logger.debug(f"[ToT] Starting beam search for: {question[:60]}...")
         self.reasoning_chain.append(f"[ToT] Question: {question}")
         self.reasoning_chain.append(f"[ToT] Beam Width: {self.beam_width}, Max Depth: {self.max_depth}")
 
         # Step 0: 生成逻辑规划（关键改进）
-        logger.info("[ToT] Step 0: Generating logical plan...")
+        logger.debug("[ToT] Step 0: Generating logical plan...")
         self.logical_plan = self._generate_logical_plan(question)
-        logger.info(f"[ToT] Logical Plan: {self.logical_plan}")
+        logger.debug(f"[ToT] Logical Plan: {self.logical_plan}")
 
         # Initialize root node with initial retrieval
-        logger.info("[ToT] Step 1: Initial retrieval...")
+        logger.debug("[ToT] Step 1: Initial retrieval...")
         initial_hits = self._retrieve_documents(question, max_hits=8)
         self.executed_queries.add(question.lower())
 
@@ -650,21 +648,21 @@ Output:"""
 
         # Beam search loop
         for depth in range(1, self.max_depth + 1):
-            logger.info(f"[ToT] Depth {depth}: Expanding {len(current_beam)} nodes...")
+            logger.debug(f"[ToT] Depth {depth}: Expanding {len(current_beam)} nodes...")
             candidates = []
 
             # Expand each node in current beam
             for node_idx, node in enumerate(current_beam):
                 # Check if this node can answer
                 if self._can_answer_question(node, question):
-                    logger.info(f"[ToT] Node {node_idx} can answer at depth {depth}")
+                    logger.debug(f"[ToT] Node {node_idx} can answer at depth {depth}")
                     # Keep it as a candidate to potentially be selected
                     # But also try to expand it to see if we can get better answer
 
                 # Generate k candidate next queries
                 candidate_queries = self._generate_candidate_queries(question, node, self.candidates_per_node)
 
-                logger.info(f"[ToT] Node {node_idx} generated {len(candidate_queries)} candidates")
+                logger.debug(f"[ToT] Node {node_idx} generated {len(candidate_queries)} candidates")
 
                 # Execute retrieval for each candidate
                 for query in candidate_queries:
@@ -692,7 +690,7 @@ Output:"""
                     candidates.append(child)
 
                     self.executed_queries.add(query.lower())
-                    logger.info(f"[ToT]   Query: '{query}' | MI Gain: {mi_gain:.3f} | Total Score: {new_score:.3f}")
+                    logger.debug(f"[ToT]   Query: '{query}' | MI Gain: {mi_gain:.3f} | Total Score: {new_score:.3f}")
 
             if not candidates:
                 logger.warning(f"[ToT] No candidates generated at depth {depth}, stopping")
@@ -719,7 +717,7 @@ Output:"""
             }
 
         best_node = current_beam[0]
-        logger.info(f"[ToT] Best path score: {best_node.score:.3f}, Depth: {best_node.depth}")
+        logger.debug(f"[ToT] Best path score: {best_node.score:.3f}, Depth: {best_node.depth}")
 
         # Generate final answer from best path
         return self._generate_final_answer(question, best_node)
@@ -735,7 +733,7 @@ Output:"""
         Returns:
             Dict with 'answer', 'chain', 'contexts'
         """
-        logger.info("[ToT] Generating final answer from best path...")
+        logger.debug("[ToT] Generating final answer from best path...")
 
         # Get all contexts from path
         all_contexts = node.get_all_contexts()

@@ -12,8 +12,6 @@ from typing import Dict, List, Optional
 from collections import defaultdict
 import logging
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 

@@ -65,6 +65,11 @@ class PipelineRunnerV2:
             ]
         )
 
+        # Suppress noisy third-party library logs
+        for lib in ('transformers', 'tokenizers', 'huggingface_hub',
+                     'sentence_transformers', 'urllib3', 'filelock'):
+            logging.getLogger(lib).setLevel(logging.ERROR)
+
         self.logger = logging.getLogger(__name__)
 
     def run(self, stages=None, datasets=None):

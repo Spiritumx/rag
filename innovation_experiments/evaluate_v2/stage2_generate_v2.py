@@ -12,9 +12,12 @@ import sys
 import json
 import subprocess
 import tempfile
+import logging
 from collections import defaultdict
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+logger = logging.getLogger(__name__)
 
 # Add paths for imports
 base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -53,7 +56,7 @@ def _load_cross_encoder_local(model_path, device='cuda'):
     if not Path(model_path).is_dir():
         raise FileNotFoundError(f"Model directory not found: {model_path}")
 
-    print(f"  [ModelLoader] Loading cross-encoder from local path: {model_path}")
+    logger.debug(f"Loading cross-encoder from local path: {model_path}")
     tokenizer = AutoTokenizer.from_pretrained(model_path, local_files_only=True)
     model = AutoModelForSequenceClassification.from_pretrained(model_path, local_files_only=True)
     model.to(device)
@@ -82,7 +85,7 @@ def _load_cross_encoder_local(model_path, device='cuda'):
             return logits.cpu().numpy()
 
     wrapper = _CrossEncoderCompat(model, tokenizer, device)
-    print(f"  [ModelLoader] Cross-encoder loaded successfully")
+    logger.debug("Cross-encoder loaded successfully")
     return wrapper
 
 
@@ -115,11 +118,11 @@ class Stage2GeneratorV2:
                 max_contexts=cascade_config.get('max_contexts_for_verification', 3),
             )
             self.cascade_enabled = True
-            print(f"[V2] Cascading enabled with threshold {self.verifier.threshold}")
+            logger.info(f"Cascading enabled (threshold={self.verifier.threshold})")
         else:
             self.verifier = None
             self.cascade_enabled = False
-            print("[V2] Cascading disabled")
+            logger.info("Cascading disabled")
 
         # Initialize routing logger
         self.routing_logger = RoutingLogger()
@@ -132,34 +135,27 @@ class Stage2GeneratorV2:
         self.tot_mi_alpha = tot_config.get('mi_alpha', 0.7)
         self.tot_mi_beta = tot_config.get('mi_beta', 0.3)
 
-        print(f"[V2] ToT Reasoning: {'Enabled (beam search)' if self.tot_enabled else 'Disabled (linear M_core)'}")
+        logger.info(f"ToT: {'beam search' if self.tot_enabled else 'linear M_core'} (beam={self.tot_beam_width}, depth={self.tot_max_depth})")
 
         # INNOVATION 3: Initialize ToT reranker for MI scoring
         tot_reranker_model = tot_config.get('reranker_model')
         tot_reranker_device = tot_config.get('reranker_device', 'cuda')
 
-        print(f"[V2] ToT reranker config: model='{tot_reranker_model}', device='{tot_reranker_device}'")
-
         if tot_reranker_model:
             # 转为绝对路径
             if not os.path.isabs(tot_reranker_model):
                 tot_reranker_model = os.path.join(base_dir, tot_reranker_model)
-            print(f"[V2] Resolved reranker path: {tot_reranker_model}")
+            logger.debug(f"Resolved reranker path: {tot_reranker_model}")
 
             try:
                 self.tot_reranker = _load_cross_encoder_local(tot_reranker_model, device=tot_reranker_device)
-                print(f"[V2] ToT reranker loaded successfully")
+                logger.info("Reranker loaded")
             except Exception as e:
-                print(f"[V2] Failed to load ToT reranker: {e}")
-                import traceback
-                traceback.print_exc()
+                logger.warning(f"Failed to load reranker: {e}")
                 self.tot_reranker = None
         else:
             self.tot_reranker = None
-            print(f"[V2] ToT reranker not configured (value={tot_reranker_model}), using simple scoring")
-            print(f"[V2] Full tot_config keys: {list(tot_config.keys())}")
-
-        print(f"[V2] ToT parameters: beam_width={self.tot_beam_width}, max_depth={self.tot_max_depth}")
+            logger.warning("Reranker not configured, using simple scoring")
 
     def run(self, datasets=None):
         """
@@ -342,11 +338,10 @@ class Stage2GeneratorV2:
         parallel_threads = self.config.get('execution', {}).get('parallel_threads', 1)
 
         if self.tot_enabled:
-            print(f"  [M-ToT] Using MI-RA-ToT beam search with {parallel_threads} threads")
             strategy_label = 'M-ToT'
         else:
-            print(f"  [M-Linear] Using baseline linear M_core with {parallel_threads} threads")
             strategy_label = 'M-Linear'
+        logger.debug(f"{strategy_label} with {parallel_threads} threads")
 
         # Define single question processing function
         def process_single_question(qid):
@@ -447,7 +442,7 @@ class Stage2GeneratorV2:
             Dict with 'predictions', 'chains', 'contexts'
         """
         # Step 1: Execute initial strategy using baseline method
-        print(f"  [Cascade] Step 1: Execute initial strategy ({action})")
+        logger.debug(f"Cascade step 1: execute {action}")
 
         # Get config for this action
         config_path = self.config_mapper.get_config_path(action, dataset_name)
@@ -486,7 +481,7 @@ class Stage2GeneratorV2:
                 )
             return initial_result
 
-        print(f"  [Cascade] Step 2: Posterior verification")
+        logger.debug("Cascade step 2: posterior verification")
 
         # Prepare final results
         final_predictions = {}
@@ -521,7 +516,7 @@ class Stage2GeneratorV2:
 
             if should_cascade:
                 cascade_target = 'M-ToT' if self.tot_enabled else 'M-Linear'
-                print(f"    [Cascade] {qid}: confidence={confidence:.3f} → Cascading to {cascade_target}")
+                logger.debug(f"Cascade {qid}: conf={confidence:.3f} -> {cascade_target}")
                 cascade_count += 1
 
                 try:
@@ -564,7 +559,7 @@ class Stage2GeneratorV2:
                     )
 
                 except Exception as e:
-                    print(f"    [Cascade] Error in ToT for {qid}: {e}")
+                    logger.warning(f"Cascade error for {qid}: {e}")
                     # Fallback to initial answer
                     final_predictions[qid] = initial_answer
                     final_chains[qid] = initial_result['chains'].get(qid, "")
@@ -597,7 +592,7 @@ class Stage2GeneratorV2:
                     dataset=dataset_name,
                 )
 
-        print(f"  [Cascade] Step 3: Results - Cascaded {cascade_count}/{len(qids)} questions ({cascade_count/len(qids)*100:.1f}%)")
+        logger.info(f"  Cascade: {cascade_count}/{len(qids)} cascaded ({cascade_count/len(qids)*100:.1f}%)")
 
         return {
             'predictions': final_predictions,
@@ -664,8 +659,7 @@ class Stage2GeneratorV2:
             env['CORPUS_NAME'] = dataset_to_corpus.get(dataset_name.lower(), 'wiki')
 
             # Run inference
-            print(f"    Running inference with config: {config_path}")
-            print(f"    Retriever: {env['RETRIEVER_HOST']}:{env['RETRIEVER_PORT']}, Corpus: {env['CORPUS_NAME']}")
+            logger.debug(f"Inference config={config_path}, retriever={env['RETRIEVER_HOST']}:{env['RETRIEVER_PORT']}, corpus={env['CORPUS_NAME']}")
             result = subprocess.run(
                 cmd,
                 capture_output=True,
