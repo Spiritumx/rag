@@ -54,9 +54,11 @@ class ConfidenceVerifier:
             try:
                 import os
                 model_path = self.model_name
-                # 转为绝对路径（如果是相对路径且存在）
-                if not os.path.isabs(model_path) and os.path.exists(model_path):
-                    model_path = os.path.abspath(model_path)
+                # 必须转为绝对路径，否则 transformers 会把多层相对路径当作 HuggingFace repo ID
+                if not os.path.isabs(model_path):
+                    # 从项目根目录解析
+                    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+                    model_path = os.path.join(project_root, model_path)
 
                 from sentence_transformers import CrossEncoder
                 print(f"[ConfidenceVerifier] Loading model: {model_path} (device={self.device})")

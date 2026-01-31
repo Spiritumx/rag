@@ -93,10 +93,10 @@ class Stage2GeneratorV2:
         print(f"[V2] ToT reranker config: model='{tot_reranker_model}', device='{tot_reranker_device}'")
 
         if tot_reranker_model:
-            # 转为绝对路径（如果是相对路径）
-            if not os.path.isabs(tot_reranker_model) and os.path.exists(tot_reranker_model):
-                tot_reranker_model = os.path.abspath(tot_reranker_model)
-                print(f"[V2] Resolved reranker path: {tot_reranker_model}")
+            # 必须转为绝对路径，否则 transformers 会把多层相对路径当作 HuggingFace repo ID
+            if not os.path.isabs(tot_reranker_model):
+                tot_reranker_model = os.path.join(base_dir, tot_reranker_model)
+            print(f"[V2] Resolved reranker path: {tot_reranker_model}")
 
             try:
                 from sentence_transformers import CrossEncoder
