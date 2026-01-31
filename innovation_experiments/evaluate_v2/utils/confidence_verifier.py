@@ -62,7 +62,7 @@ class ConfidenceVerifier:
 
                 from sentence_transformers import CrossEncoder
                 print(f"[ConfidenceVerifier] Loading model: {model_path} (device={self.device})")
-                self.model = CrossEncoder(model_path, device=self.device)
+                self.model = CrossEncoder(model_path, device=self.device, local_files_only=True)
                 print(f"[ConfidenceVerifier] Model loaded successfully")
             except Exception as e:
                 print(f"[ConfidenceVerifier] Failed to load model: {e}")

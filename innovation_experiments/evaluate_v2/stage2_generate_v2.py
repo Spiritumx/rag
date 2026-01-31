@@ -100,7 +100,7 @@ class Stage2GeneratorV2:
 
             try:
                 from sentence_transformers import CrossEncoder
-                self.tot_reranker = CrossEncoder(tot_reranker_model, device=tot_reranker_device)
+                self.tot_reranker = CrossEncoder(tot_reranker_model, device=tot_reranker_device, local_files_only=True)
                 print(f"[V2] ToT reranker loaded successfully: {tot_reranker_model}")
             except Exception as e:
                 print(f"[V2] Failed to load ToT reranker: {e}")
