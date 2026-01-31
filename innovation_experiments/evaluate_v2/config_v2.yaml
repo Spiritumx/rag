@@ -84,7 +84,7 @@ innovations:
   cascading_routing:
     enabled: true
     confidence_threshold: 0.6  # Cascade if confidence < 0.6 (global default)
-    verifier_model: "retriever_server/model/reranker/ms-marco-MiniLM-L6-v2"
+    verifier_model: "retriever_server/models/reranker/ms-marco-MiniLM-L6-v2"
     verifier_device: "cuda"
     max_contexts_for_verification: 3  # Top-N contexts to verify against
     cascade_target: "M-ToT"  # Which strategy to cascade to (M-ToT)
@@ -118,7 +118,7 @@ innovations:
     mi_beta: 0.35   # 略微增加，鼓励探索新实体
 
     # Reranker for MI scoring (optional, uses simple scoring if not provided)
-    reranker_model: "retriever_server/model/reranker/ms-marco-MiniLM-L6-v2"
+    reranker_model: "retriever_server/models/reranker/ms-marco-MiniLM-L6-v2"
     reranker_device: "cuda"
 
     # Termination criteria
