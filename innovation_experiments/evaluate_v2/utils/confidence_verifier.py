@@ -52,12 +52,20 @@ class ConfidenceVerifier:
         """Lazy load cross-encoder model."""
         if self.model is None:
             try:
+                import os
+                model_path = self.model_name
+                # 转为绝对路径（如果是相对路径且存在）
+                if not os.path.isabs(model_path) and os.path.exists(model_path):
+                    model_path = os.path.abspath(model_path)
+
                 from sentence_transformers import CrossEncoder
-                logger.info(f"Loading confidence verifier model: {self.model_name}")
-                self.model = CrossEncoder(self.model_name, device=self.device)
-                logger.info("Confidence verifier model loaded successfully")
+                print(f"[ConfidenceVerifier] Loading model: {model_path} (device={self.device})")
+                self.model = CrossEncoder(model_path, device=self.device)
+                print(f"[ConfidenceVerifier] Model loaded successfully")
             except Exception as e:
-                logger.error(f"Failed to load confidence verifier model: {e}")
+                print(f"[ConfidenceVerifier] Failed to load model: {e}")
+                import traceback
+                traceback.print_exc()
                 logger.warning("Confidence verification will be disabled")
                 self.model = None
 

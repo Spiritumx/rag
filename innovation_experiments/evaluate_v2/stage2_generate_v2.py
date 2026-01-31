@@ -90,17 +90,27 @@ class Stage2GeneratorV2:
         tot_reranker_model = tot_config.get('reranker_model')
         tot_reranker_device = tot_config.get('reranker_device', 'cuda')
 
+        print(f"[V2] ToT reranker config: model='{tot_reranker_model}', device='{tot_reranker_device}'")
+
         if tot_reranker_model:
+            # 转为绝对路径（如果是相对路径）
+            if not os.path.isabs(tot_reranker_model) and os.path.exists(tot_reranker_model):
+                tot_reranker_model = os.path.abspath(tot_reranker_model)
+                print(f"[V2] Resolved reranker path: {tot_reranker_model}")
+
             try:
                 from sentence_transformers import CrossEncoder
                 self.tot_reranker = CrossEncoder(tot_reranker_model, device=tot_reranker_device)
-                print(f"[V2] ToT reranker loaded: {tot_reranker_model}")
+                print(f"[V2] ToT reranker loaded successfully: {tot_reranker_model}")
             except Exception as e:
                 print(f"[V2] Failed to load ToT reranker: {e}")
+                import traceback
+                traceback.print_exc()
                 self.tot_reranker = None
         else:
             self.tot_reranker = None
-            print("[V2] ToT reranker not configured, using simple scoring")
+            print(f"[V2] ToT reranker not configured (value={tot_reranker_model}), using simple scoring")
+            print(f"[V2] Full tot_config keys: {list(tot_config.keys())}")
 
         print(f"[V2] ToT parameters: beam_width={self.tot_beam_width}, max_depth={self.tot_max_depth}")
 
