@@ -525,29 +525,46 @@ Output:"""
             if len(candidates) < k:
                 logger.warning(f"Only generated {len(candidates)}/{k} candidates, using smart fallback")
 
+                # 收集已有候选用于去重
+                all_seen = self.executed_queries.copy()
+                for c in candidates:
+                    all_seen.add(c.lower())
+
                 # 从逻辑规划中提取未搜索的步骤
                 plan_parts = self.logical_plan.split('->')
                 for part in plan_parts:
                     part = part.strip().lower()
-                    if part and not _is_semantically_similar(part, self.executed_queries):
+                    if part and len(part) >= 2 and not _is_semantically_similar(part, all_seen):
                         candidates.append(part)
+                        all_seen.add(part)
                         if len(candidates) >= k:
                             break
 
-                # 如果还不够，组合已有实体
+                # 如果还不够，组合已有实体与问题关键词
                 if len(candidates) < k and found_entities:
+                    q_words = [w for w in question.lower().split() if len(w) > 3]
                     for entity in found_entities:
-                        combo_query = f"{entity} {question.split()[0]}"
-                        if not _is_semantically_similar(combo_query.lower(), self.executed_queries):
-                            candidates.append(combo_query.lower())
-                            if len(candidates) >= k:
-                                break
+                        for q_word in q_words[:3]:
+                            combo_query = f"{entity} {q_word}".lower()
+                            if not _is_semantically_similar(combo_query, all_seen):
+                                candidates.append(combo_query)
+                                all_seen.add(combo_query)
+                                if len(candidates) >= k:
+                                    break
+                        if len(candidates) >= k:
+                            break
 
-                # 最后兜底
-                while len(candidates) < k:
-                    candidates.append(question[:30].lower())
+            # 去重后截取（防止任何漏网的重复）
+            unique_candidates = []
+            seen_set = set()
+            for c in candidates:
+                c_lower = c.lower().strip()
+                if c_lower not in seen_set:
+                    unique_candidates.append(c)
+                    seen_set.add(c_lower)
 
-            return candidates[:k]
+            # 如果去重后不足 k 个，用剩余的填充（不再强制凑齐，避免重复）
+            return unique_candidates[:k]
 
         except Exception as e:
             logger.error(f"Failed to generate candidate queries: {e}")

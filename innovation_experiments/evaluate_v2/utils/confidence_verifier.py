@@ -81,8 +81,9 @@ class ConfidenceVerifier:
             Confidence score (0-1) or detailed dict if return_detailed=True
         """
         if self.model is None:
-            logger.warning("Confidence verifier model not loaded, returning neutral score 0.5")
-            return 0.5 if not return_detailed else {"confidence": 0.5, "scores": []}
+            # 模型未加载时，返回高置信度以跳过级联，避免所有问题被错误地全部级联
+            logger.warning("Confidence verifier model not loaded, returning high score 0.9 (skip cascade)")
+            return 0.9 if not return_detailed else {"confidence": 0.9, "scores": []}
 
         if not contexts:
             logger.warning("No contexts provided for verification, returning low confidence 0.0")

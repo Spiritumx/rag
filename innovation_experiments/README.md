@@ -46,10 +46,11 @@
 │   │                                         │                       │      │
 │   │                                         ▼                       │      │
 │   │  ┌─────────────────────────────────────────────────────────┐   │      │
-│   │  │  [创新3] MI-RA-ToT 束搜索推理                             │   │      │
-│   │  │  • 并行探索多条推理路径 (beam_width=3)                    │   │      │
-│   │  │  • 互信息评分: α×相关性 + β×新颖性                        │   │      │
-│   │  │  • 剪枝保留最优路径                                       │   │      │
+│   │  │  [创新3] MI-RA-ToT 束搜索推理 (v2 改进版)                  │   │      │
+│   │  │  • 逻辑规划指导搜索方向 (Logical Planning)                │   │      │
+│   │  │  • 并行探索多条推理路径 (beam_width=3-4)                  │   │      │
+│   │  │  • 实体级新颖性评分: 0.4×标题新颖 + 0.6×内容新颖          │   │      │
+│   │  │  • 智能终止: 检查逻辑规划覆盖率                            │   │      │
 │   │  └─────────────────────────────────────────────────────────┘   │      │
 │   └─────────────────────────────────────────────────────────────────┘      │
 │                           │                                                 │
@@ -70,7 +71,7 @@
 |-------|---------|---------|---------|
 | 1. 自适应检索 | 固定权重无法适应不同查询类型 | 根据查询特征动态调整权重 | Temperature-scaled Softmax |
 | 2. 级联动态路由 | 分类器误判导致答案质量下降 | 置信度后验验证 + 自动回退 | Cross-Encoder 评分 |
-| 3. MI-RA-ToT | 贪心推理容易陷入局部最优 | 束搜索并行探索多条路径 | 互信息评分 + 剪枝 |
+| 3. MI-RA-ToT (v2) | 贪心推理容易陷入局部最优 | 逻辑规划 + 束搜索 + 实体感知评分 | 互信息评分 + 规划覆盖检测 |
 
 ---
 
@@ -486,6 +487,14 @@ class ConfidenceVerifier:
 │       │                                                             │
 │       ▼                                                             │
 │  ┌─────────────────────────────────────────────────────────────┐   │
+│  │  Step 0: 生成逻辑规划 (v2 新增)                               │   │
+│  │  ├─ 输入: 原问题                                              │   │
+│  │  ├─ LLM 生成: "Tom Hanks WWII movie -> movie director"       │   │
+│  │  └─ 用于: 指导候选查询生成 + 终止条件判断                      │   │
+│  └─────────────────────────────────────────────────────────────┘   │
+│       │                                                             │
+│       ▼                                                             │
+│  ┌─────────────────────────────────────────────────────────────┐   │
 │  │  Step 1: 初始化根节点                                        │   │
 │  │  ├─ 执行初始检索: query = 原问题                             │   │
 │  │  ├─ 检索结果: [doc1, doc2, ..., doc8]                       │   │
@@ -504,21 +513,23 @@ class ConfidenceVerifier:
 │  │  │          │                                                │   │
 │  │  │          ▼                                                │   │
 │  │  │      ┌────────────────────────────────────────────────┐  │   │
-│  │  │      │  Step 2a: 生成 k 个候选查询                     │  │   │
-│  │  │      │  ├─ LLM 生成多样化查询 (temperature=0.7)        │  │   │
+│  │  │      │  Step 2a: 生成 k 个候选查询 (v2 改进)           │  │   │
+│  │  │      │  ├─ 基于逻辑规划生成 (temperature=0.3)          │  │   │
 │  │  │      │  │                                              │  │   │
-│  │  │      │  │  Prompt:                                     │  │   │
-│  │  │      │  │  "Generate 3 different search queries        │  │   │
-│  │  │      │  │   to find: {问题}                            │  │   │
-│  │  │      │  │   Current context: {已有文档}                │  │   │
-│  │  │      │  │   Past steps: {历史查询}"                    │  │   │
+│  │  │      │  │  Prompt (v2):                                │  │   │
+│  │  │      │  │  "*** LOGICAL PLAN ***                       │  │   │
+│  │  │      │  │   {逻辑规划}                                  │  │   │
+│  │  │      │  │   *** FOUND ENTITIES ***                     │  │   │
+│  │  │      │  │   {已发现实体}                                │  │   │
+│  │  │      │  │   *** TASK ***                               │  │   │
+│  │  │      │  │   Generate queries for NEXT step..."         │  │   │
 │  │  │      │  │                                              │  │   │
 │  │  │      │  │  输出:                                       │  │   │
 │  │  │      │  │  Query 1: "70th Academy Awards Best Picture" │  │   │
 │  │  │      │  │  Query 2: "1998 Oscar winner film"           │  │   │
 │  │  │      │  │  Query 3: "Best Picture 1998 director"       │  │   │
 │  │  │      │  │                                              │  │   │
-│  │  │      │  └─ 去重 + 清洗 → candidate_queries             │  │   │
+│  │  │      │  └─ 去重 + 清洗 + 智能 Fallback                 │  │   │
 │  │  │      └────────────────────────────────────────────────┘  │   │
 │  │  │          │                                                │   │
 │  │  │          ▼                                                │   │
@@ -645,17 +656,23 @@ class ConfidenceVerifier:
 │  └───────────────────────────────────────────────────────────────┘ │
 │                                                                     │
 │  ┌───────────────────────────────────────────────────────────────┐ │
-│  │  Novelty (新颖性): 新文档与已有文档的差异度                    │ │
+│  │  Novelty (新颖性): 新文档与已有文档的差异度 (v2 改进)          │ │
 │  │  │                                                            │ │
-│  │  │  计算方式: 1 - max(Jaccard相似度)                          │ │
+│  │  │  计算方式 (v2):                                            │ │
+│  │  │  novelty = 0.4 × title_novelty + 0.6 × content_novelty    │ │
+│  │  │                                                            │ │
+│  │  │  title_novelty:  新标题(实体)? → 1.0, 否则 → 0.3          │ │
+│  │  │  content_novelty: 1 - max(Jaccard相似度)                  │ │
 │  │  │                                                            │ │
 │  │  │  例:                                                       │ │
-│  │  │  已有文档: "James Cameron directed Titanic"                │ │
-│  │  │  新文档1: "James Cameron also directed Avatar"             │ │
-│  │  │  → Jaccard = 2/7 = 0.29, novelty = 0.71 (较新颖)          │ │
+│  │  │  已有文档: [title="Titanic", text="James Cameron..."]     │ │
+│  │  │  新文档1: [title="Avatar", text="James Cameron..."]       │ │
+│  │  │  → title_novelty=1.0 (新实体!), content_novelty=0.71     │ │
+│  │  │  → novelty = 0.4×1.0 + 0.6×0.71 = 0.83 (高分，鼓励探索)  │ │
 │  │  │                                                            │ │
-│  │  │  新文档2: "James Cameron is the director of Titanic film" │ │
-│  │  │  → Jaccard = 5/8 = 0.63, novelty = 0.37 (冗余)            │ │
+│  │  │  新文档2: [title="Titanic", text="Titanic won Oscar..."]  │ │
+│  │  │  → title_novelty=0.3 (旧实体), content_novelty=0.50      │ │
+│  │  │  → novelty = 0.4×0.3 + 0.6×0.50 = 0.42 (较低)            │ │
 │  └───────────────────────────────────────────────────────────────┘ │
 │                                                                     │
 │  ┌───────────────────────────────────────────────────────────────┐ │
@@ -699,17 +716,30 @@ class TreeNode:
 
 
 class MutualInformationScorer:
+    def calculate_novelty(self, new_doc, existing_docs) -> float:
+        # v2 改进: 实体级新颖性
+        new_title = new_doc.get('title', '').lower()
+        existing_titles = {d.get('title', '').lower() for d in existing_docs}
+
+        title_novelty = 1.0 if new_title not in existing_titles else 0.3
+        content_novelty = 1 - max_jaccard(new_doc, existing_docs)
+
+        return 0.4 * title_novelty + 0.6 * content_novelty
+
     def calculate_mi_gain(self, question, new_docs, existing_docs) -> float:
         total = 0.0
         for doc in new_docs:
             rel = self.calculate_relevance(question, doc)  # Cross-Encoder
-            nov = self.calculate_novelty(doc, existing_docs)  # 1 - Jaccard
+            nov = self.calculate_novelty(doc, existing_docs)  # v2: 实体感知
             total += self.mi_alpha * rel + self.mi_beta * nov
         return total / len(new_docs) if new_docs else 0.0
 
 
 class BeamSearchToT:
     def search(self, question: str) -> Dict:
+        # v2 新增: 生成逻辑规划
+        self.logical_plan = self._generate_logical_plan(question)
+
         # 初始化
         root = TreeNode(query=question, contexts=self.retrieve(question), score=0)
         current_beam = [root]
@@ -718,6 +748,7 @@ class BeamSearchToT:
         for depth in range(1, self.max_depth + 1):
             candidates = []
             for node in current_beam:
+                # v2 改进: 基于逻辑规划生成候选
                 for query in self.generate_candidates(question, node, k=3):
                     new_docs = self.retrieve(query)
                     mi_gain = self.mi_scorer.calculate_mi_gain(
@@ -736,13 +767,119 @@ class BeamSearchToT:
 
 ### 参数配置
 
-| 参数 | 默认值 | 说明 |
-|-----|-------|------|
-| beam_width | 3 | 每层保留的路径数 |
-| max_depth | 4 | 最大搜索深度 |
-| candidates_per_node | 3 | 每个节点生成的候选查询数 |
-| mi_alpha | 0.7 | 相关性权重 |
-| mi_beta | 0.3 | 新颖性权重 |
+| 参数 | 默认值 | 说明 | 推荐范围 |
+|-----|-------|------|---------|
+| beam_width | 3-4 | 每层保留的路径数 | 2-4，复杂问题用 4 |
+| max_depth | 4 | 最大搜索深度 | 3-5，musique/2wikimqa 用 5 |
+| candidates_per_node | 3 | 每个节点生成的候选查询数 | 2-3，太多增加噪声 |
+| mi_alpha | 0.65 | 相关性权重 | 0.6-0.8 |
+| mi_beta | 0.35 | 新颖性权重 | 0.2-0.4 |
+| query_temperature | 0.3 | 查询生成温度 | 0.2-0.4，太高生成无意义查询 |
+
+---
+
+### MI-RA-ToT 改进 (v2)
+
+针对 ToT 效果与基线 M_core 差距不大的问题，进行了以下关键改进：
+
+#### 改进 1: 添加逻辑规划 (Logical Planning)
+
+**问题**: 原始 ToT 让 LLM 自由生成候选查询，容易偏离推理方向。
+
+**解决方案**: 在搜索开始前生成逻辑规划，指导后续查询生成。
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  逻辑规划示例                                                         │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  问题: "Who directed the movie starring Tom Hanks about WWII?"      │
+│                                                                     │
+│  逻辑规划: "Tom Hanks WWII movie -> movie director"                 │
+│                                                                     │
+│  作用:                                                               │
+│  1. 指导候选查询生成的方向                                            │
+│  2. 用于评估是否已收集足够信息                                         │
+│  3. Fallback 时从规划中提取未搜索的步骤                               │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+#### 改进 2: 优化候选查询生成
+
+| 改进前 | 改进后 |
+|--------|--------|
+| temperature=0.7（太高，查询质量低） | temperature=0.3（更精确） |
+| 无指导的自由生成 | 基于逻辑规划 + 已发现实体 |
+| Fallback 只是复制第一个候选 | 从规划中提取未搜索步骤，或组合已有实体 |
+
+**改进后的 Prompt 结构**:
+```
+*** LOGICAL PLAN ***
+{逻辑规划}
+
+*** FOUND ENTITIES ***
+{已发现的实体}
+
+*** TASK ***
+Based on the logical plan and what you've found, generate k different
+search queries for the NEXT step.
+```
+
+#### 改进 3: 实体级新颖性评分
+
+**问题**: 原始新颖性只用内容词重叠 (Jaccard)，无法识别"新实体"的价值。
+
+**解决方案**: 组合标题（实体）新颖性和内容新颖性。
+
+```python
+# 改进前
+novelty = 1 - max_jaccard(new_doc, existing_docs)
+
+# 改进后
+title_novelty = 1.0 if new_title not in existing_titles else 0.3
+content_novelty = 1 - max_jaccard(new_doc.text, existing_docs.text)
+novelty = 0.4 * title_novelty + 0.6 * content_novelty
+```
+
+**效果**: 新实体（如多跳中的桥接实体）获得更高评分，鼓励探索新的推理路径。
+
+#### 改进 4: 智能终止条件
+
+**问题**: 原始终止条件只检查 context 数量，不检查信息质量。
+
+**解决方案**: 检查是否覆盖了逻辑规划的关键步骤。
+
+```python
+# 检查规划覆盖率
+plan_parts = logical_plan.split('->')
+covered = count(parts covered in contexts)
+
+if covered >= len(plan_parts) * 0.7:
+    return True  # 覆盖 70% 以上，可以回答
+```
+
+#### 改进效果对比
+
+| 场景 | 改进前 | 改进后 |
+|------|--------|--------|
+| 候选查询质量 | 多样但不精准 | 精准且有方向 |
+| 桥接实体发现 | 低优先级 | 高优先级 (实体新颖性) |
+| 提前终止 | 盲目（只看数量） | 智能（检查规划覆盖） |
+| Fallback | 无意义重复 | 从规划中提取有意义查询 |
+
+#### 配置建议
+
+```yaml
+tot_reasoning:
+  enabled: true
+  beam_width: 4          # 增加到 4，提高召回
+  max_depth: 4           # 4-5 层足够大多数问题
+  candidates_per_node: 3
+  mi_alpha: 0.65         # 略降相关性权重
+  mi_beta: 0.35          # 略增新颖性权重，鼓励发现新实体
+  query_temperature: 0.3 # 低温度，提高查询质量
+```
 
 ---
 
