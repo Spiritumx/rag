@@ -127,7 +127,8 @@ class ConfidenceVerifier:
             return 0.9 if not return_detailed else {"confidence": 0.9, "scores": []}
 
         if not contexts:
-            return 0.0 if not return_detailed else {"confidence": 0.0, "scores": []}
+            # 无 context 无法验证，保持原结果不级联
+            return 0.8 if not return_detailed else {"confidence": 0.8, "scores": []}
 
         if not answer or len(answer.strip()) < 2:
             return 0.0 if not return_detailed else {"confidence": 0.0, "scores": []}

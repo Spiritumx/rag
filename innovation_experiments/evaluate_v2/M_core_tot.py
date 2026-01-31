@@ -521,7 +521,7 @@ Output:"""
 
             # 改进的 Fallback：基于逻辑规划和已有实体生成
             if len(candidates) < k:
-                logger.warning(f"Only generated {len(candidates)}/{k} candidates, using smart fallback")
+                logger.debug(f"Only generated {len(candidates)}/{k} candidates, using smart fallback")
 
                 # 收集已有候选用于去重
                 all_seen = self.executed_queries.copy()

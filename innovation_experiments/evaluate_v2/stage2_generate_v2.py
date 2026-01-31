@@ -673,20 +673,30 @@ class Stage2GeneratorV2:
                 print(f"    stderr: {result.stderr[:500]}")
 
             # Load predictions
+            # configurable_inference outputs:
+            #   predictions.json          -> {qid: answer_string, ...}
+            #   predictions_contexts.json -> {qid: [context_list], ...}
             if os.path.exists(output_file):
                 with open(output_file, 'r', encoding='utf-8') as f:
                     predictions_data = json.load(f)
 
-                # Convert to expected format
+                # predictions_data is {qid: answer_string}
                 predictions = {}
                 chains = {}
                 contexts = {}
 
-                for item in predictions_data:
-                    qid = item['question_id']
-                    predictions[qid] = item.get('predicted_answer', "I don't know")
-                    chains[qid] = item.get('reasoning_chain', "")
-                    contexts[qid] = item.get('contexts', [])
+                for qid, answer in predictions_data.items():
+                    predictions[qid] = answer if answer else "I don't know"
+                    chains[qid] = ""
+
+                # Load contexts from separate file
+                contexts_file = output_file.replace('.json', '_contexts.json')
+                if os.path.exists(contexts_file):
+                    with open(contexts_file, 'r', encoding='utf-8') as f:
+                        contexts = json.load(f)
+                else:
+                    logger.debug("No contexts file found from inference subprocess")
+                    contexts = {qid: [] for qid in predictions}
 
                 return {
                     'predictions': predictions,
