@@ -38,6 +38,54 @@ from evaluate_v2.M_core_tot import execute_tot_multihop
 from evaluate.M_core import execute_real_multihop as execute_linear_multihop
 
 
+def _load_cross_encoder_local(model_path, device='cuda'):
+    """
+    Load a cross-encoder reranker from a local directory.
+    Bypasses sentence_transformers.CrossEncoder (which may trigger HuggingFace Hub
+    validation errors on local paths) by loading via transformers directly.
+    Returns an object with a .predict(pairs) interface identical to CrossEncoder.
+    """
+    from pathlib import Path
+    import torch
+    from transformers import AutoModelForSequenceClassification, AutoTokenizer
+
+    model_path = str(Path(model_path).resolve())
+    if not Path(model_path).is_dir():
+        raise FileNotFoundError(f"Model directory not found: {model_path}")
+
+    print(f"  [ModelLoader] Loading cross-encoder from local path: {model_path}")
+    tokenizer = AutoTokenizer.from_pretrained(model_path, local_files_only=True)
+    model = AutoModelForSequenceClassification.from_pretrained(model_path, local_files_only=True)
+    model.to(device)
+    model.eval()
+
+    class _CrossEncoderCompat:
+        """Compatibility wrapper providing CrossEncoder.predict() interface."""
+        def __init__(self, model, tokenizer, device):
+            self._model = model
+            self._tokenizer = tokenizer
+            self._device = device
+
+        def predict(self, pairs):
+            texts_a = [p[0] for p in pairs]
+            texts_b = [p[1] for p in pairs]
+            features = self._tokenizer(
+                texts_a, texts_b,
+                padding=True, truncation=True,
+                return_tensors='pt', max_length=512
+            )
+            features = {k: v.to(self._device) for k, v in features.items()}
+            with torch.no_grad():
+                logits = self._model(**features).logits
+                if logits.dim() > 1 and logits.size(-1) == 1:
+                    logits = logits.view(-1)
+            return logits.cpu().numpy()
+
+    wrapper = _CrossEncoderCompat(model, tokenizer, device)
+    print(f"  [ModelLoader] Cross-encoder loaded successfully")
+    return wrapper
+
+
 class Stage2GeneratorV2:
     """
     Stage 2 Generator with Innovations.
@@ -93,15 +141,14 @@ class Stage2GeneratorV2:
         print(f"[V2] ToT reranker config: model='{tot_reranker_model}', device='{tot_reranker_device}'")
 
         if tot_reranker_model:
-            # 必须转为绝对路径，否则 transformers 会把多层相对路径当作 HuggingFace repo ID
+            # 转为绝对路径
             if not os.path.isabs(tot_reranker_model):
                 tot_reranker_model = os.path.join(base_dir, tot_reranker_model)
             print(f"[V2] Resolved reranker path: {tot_reranker_model}")
 
             try:
-                from sentence_transformers import CrossEncoder
-                self.tot_reranker = CrossEncoder(tot_reranker_model, device=tot_reranker_device, local_files_only=True)
-                print(f"[V2] ToT reranker loaded successfully: {tot_reranker_model}")
+                self.tot_reranker = _load_cross_encoder_local(tot_reranker_model, device=tot_reranker_device)
+                print(f"[V2] ToT reranker loaded successfully")
             except Exception as e:
                 print(f"[V2] Failed to load ToT reranker: {e}")
                 import traceback

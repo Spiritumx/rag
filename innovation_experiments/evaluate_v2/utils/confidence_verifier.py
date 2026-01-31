@@ -49,20 +49,56 @@ class ConfidenceVerifier:
         self._load_model()
 
     def _load_model(self):
-        """Lazy load cross-encoder model."""
+        """Lazy load cross-encoder model from local path via transformers directly."""
         if self.model is None:
             try:
                 import os
+                from pathlib import Path
+                import torch
+                from transformers import AutoModelForSequenceClassification, AutoTokenizer
+
                 model_path = self.model_name
-                # 必须转为绝对路径，否则 transformers 会把多层相对路径当作 HuggingFace repo ID
+                # 转为绝对路径
                 if not os.path.isabs(model_path):
-                    # 从项目根目录解析
                     project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
                     model_path = os.path.join(project_root, model_path)
 
-                from sentence_transformers import CrossEncoder
-                print(f"[ConfidenceVerifier] Loading model: {model_path} (device={self.device})")
-                self.model = CrossEncoder(model_path, device=self.device, local_files_only=True)
+                model_path = str(Path(model_path).resolve())
+
+                if not Path(model_path).is_dir():
+                    print(f"[ConfidenceVerifier] Model directory not found: {model_path}")
+                    self.model = None
+                    return
+
+                print(f"[ConfidenceVerifier] Loading model from: {model_path} (device={self.device})")
+                tokenizer = AutoTokenizer.from_pretrained(model_path, local_files_only=True)
+                raw_model = AutoModelForSequenceClassification.from_pretrained(model_path, local_files_only=True)
+                raw_model.to(self.device)
+                raw_model.eval()
+
+                # Wrapper providing .predict(pairs) interface compatible with CrossEncoder
+                class _CrossEncoderCompat:
+                    def __init__(self, model, tokenizer, device):
+                        self._model = model
+                        self._tokenizer = tokenizer
+                        self._device = device
+
+                    def predict(self, pairs):
+                        texts_a = [p[0] for p in pairs]
+                        texts_b = [p[1] for p in pairs]
+                        features = self._tokenizer(
+                            texts_a, texts_b,
+                            padding=True, truncation=True,
+                            return_tensors='pt', max_length=512
+                        )
+                        features = {k: v.to(self._device) for k, v in features.items()}
+                        with torch.no_grad():
+                            logits = self._model(**features).logits
+                            if logits.dim() > 1 and logits.size(-1) == 1:
+                                logits = logits.view(-1)
+                        return logits.cpu().numpy()
+
+                self.model = _CrossEncoderCompat(raw_model, tokenizer, self.device)
                 print(f"[ConfidenceVerifier] Model loaded successfully")
             except Exception as e:
                 print(f"[ConfidenceVerifier] Failed to load model: {e}")
