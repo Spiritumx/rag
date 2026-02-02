@@ -300,7 +300,8 @@ class Stage2GeneratorV2:
                         result = self.process_m_strategy_tot(
                             unprocessed_qids, test_data_map, dataset_name
                         )
-                        self._save_cache(cache_key, result)
+                        if result['predictions']:
+                            self._save_cache(cache_key, result)
 
                 # INNOVATION 2: Non-M strategies → With cascading
                 else:
@@ -507,8 +508,9 @@ class Stage2GeneratorV2:
             if os.path.exists(temp_input_file):
                 os.remove(temp_input_file)
 
-            # Save to cache for other ablation models to reuse
-            self._save_cache(inference_cache_key, initial_result)
+            # Only cache successful results (non-empty predictions)
+            if initial_result['predictions']:
+                self._save_cache(inference_cache_key, initial_result)
 
         # Step 2: Posterior verification (if enabled)
         if not self.cascade_enabled:
@@ -707,6 +709,9 @@ class Stage2GeneratorV2:
 
             # Prepare environment with retriever config (CRITICAL for ablation experiments)
             env = os.environ.copy()
+            # Force offline mode — models are local, no HuggingFace access needed
+            env['HF_HUB_OFFLINE'] = '1'
+            env['TRANSFORMERS_OFFLINE'] = '1'
             retriever_host = str(self.config['retriever']['host'])
             if not retriever_host.startswith('http'):
                 retriever_host = f'http://{retriever_host}'
