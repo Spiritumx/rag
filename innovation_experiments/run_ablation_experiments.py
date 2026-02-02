@@ -110,11 +110,13 @@ def create_experiment_config(base_config_path: str, experiment_id: str, output_b
     config['outputs']['cascade_dir'] = f'innovation_experiments/ablation_results/{exp_name}/cascade_analysis'
     config['execution']['log_file'] = f'innovation_experiments/ablation_results/{exp_name}/pipeline.log'
 
-    # 添加消融标记
+    # 添加消融标记 + 共享缓存目录（避免重复计算 M-ToT 和 non-M inference）
+    shared_cache = os.path.join(output_base, '_shared_cache')
     config['ablation'] = {
         'experiment_id': experiment_id,
         'experiment_name': exp_name,
         'description': exp_info['description'],
+        'shared_cache_dir': shared_cache,
     }
 
     # 创建输出目录

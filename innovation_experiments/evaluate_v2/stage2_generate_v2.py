@@ -137,6 +137,12 @@ class Stage2GeneratorV2:
 
         logger.info(f"ToT: {'beam search' if self.tot_enabled else 'linear M_core'} (beam={self.tot_beam_width}, depth={self.tot_max_depth})")
 
+        # Ablation shared cache: avoid recomputing identical M-ToT / non-M inference
+        self.shared_cache_dir = config.get('ablation', {}).get('shared_cache_dir', None)
+        if self.shared_cache_dir:
+            os.makedirs(self.shared_cache_dir, exist_ok=True)
+            logger.info(f"Ablation shared cache: {self.shared_cache_dir}")
+
         # INNOVATION 3: Initialize ToT reranker for MI scoring
         tot_reranker_model = tot_config.get('reranker_model')
         tot_reranker_device = tot_config.get('reranker_device', 'cuda')
@@ -193,6 +199,37 @@ class Stage2GeneratorV2:
         print("\n" + "="*60)
         print("✓ STAGE 2 (V2) COMPLETE")
         print("="*60)
+
+    # ---- Ablation cache helpers ----
+    def _cache_key(self, dataset_name: str, action: str) -> str:
+        """Build cache key: {dataset}_{action}_{port}_{tot|linear}."""
+        port = self.config['retriever']['port']
+        mode = 'tot' if self.tot_enabled else 'linear'
+        return f"{dataset_name}_{action}_{port}_{mode}"
+
+    def _save_cache(self, key: str, data: dict):
+        if not self.shared_cache_dir:
+            return
+        path = os.path.join(self.shared_cache_dir, f"{key}.json")
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False)
+        logger.info(f"  [Cache] Saved: {key}")
+
+    def _load_cache(self, key: str) -> dict:
+        if not self.shared_cache_dir:
+            return None
+        path = os.path.join(self.shared_cache_dir, f"{key}.json")
+        if os.path.exists(path):
+            with open(path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            logger.info(f"  [Cache HIT] Loaded: {key} ({len(data.get('predictions', {}))} predictions)")
+            return data
+        return None
+
+    def _cache_key_inference(self, dataset_name: str, action: str) -> str:
+        """Cache key for non-M initial inference (pre-cascade), keyed by port only."""
+        port = self.config['retriever']['port']
+        return f"{dataset_name}_{action}_{port}_inference"
 
     def generate_for_dataset(self, dataset_name: str):
         """
@@ -254,9 +291,16 @@ class Stage2GeneratorV2:
             try:
                 # INNOVATION 3: M strategy → MI-RA-ToT
                 if action == 'M':
-                    result = self.process_m_strategy_tot(
-                        unprocessed_qids, test_data_map, dataset_name
-                    )
+                    # Check ablation cache (A and C share M-ToT on same port)
+                    cache_key = self._cache_key(dataset_name, action)
+                    cached = self._load_cache(cache_key)
+                    if cached is not None:
+                        result = cached
+                    else:
+                        result = self.process_m_strategy_tot(
+                            unprocessed_qids, test_data_map, dataset_name
+                        )
+                        self._save_cache(cache_key, result)
 
                 # INNOVATION 2: Non-M strategies → With cascading
                 else:
@@ -441,29 +485,30 @@ class Stage2GeneratorV2:
         Returns:
             Dict with 'predictions', 'chains', 'contexts'
         """
-        # Step 1: Execute initial strategy using baseline method
-        logger.debug(f"Cascade step 1: execute {action}")
+        # Step 1: Execute initial strategy (with ablation cache support)
+        # Cache key by (dataset, action, port) — same for A/B/C (port 8002)
+        inference_cache_key = self._cache_key_inference(dataset_name, action)
+        initial_result = self._load_cache(inference_cache_key)
 
-        # Get config for this action
-        config_path = self.config_mapper.get_config_path(action, dataset_name)
+        if initial_result is None:
+            config_path = self.config_mapper.get_config_path(action, dataset_name)
+            temp_input_file = self.create_temp_input_file(
+                dataset_name, action, qids, test_data_map
+            )
 
-        # Create temporary input file
-        temp_input_file = self.create_temp_input_file(
-            dataset_name, action, qids, test_data_map
-        )
+            initial_result = self.run_inference(
+                config_path=config_path,
+                input_file=temp_input_file,
+                dataset_name=dataset_name,
+                action=action,
+                num_questions=len(qids)
+            )
 
-        # Run generation using configurable_inference
-        initial_result = self.run_inference(
-            config_path=config_path,
-            input_file=temp_input_file,
-            dataset_name=dataset_name,
-            action=action,
-            num_questions=len(qids)
-        )
+            if os.path.exists(temp_input_file):
+                os.remove(temp_input_file)
 
-        # Cleanup temp file
-        if os.path.exists(temp_input_file):
-            os.remove(temp_input_file)
+            # Save to cache for other ablation models to reuse
+            self._save_cache(inference_cache_key, initial_result)
 
         # Step 2: Posterior verification (if enabled)
         if not self.cascade_enabled:
@@ -481,7 +526,15 @@ class Stage2GeneratorV2:
                 )
             return initial_result
 
-        logger.debug("Cascade step 2: posterior verification")
+        logger.info(f"  [{action}] Cascade verification: {len(qids)} questions, threshold={self.verifier.threshold}")
+
+        # Check inference produced predictions
+        n_predicted = len(initial_result['predictions'])
+        n_with_ctx = sum(1 for c in initial_result['contexts'].values() if c)
+        logger.info(f"  [{action}] Inference produced {n_predicted}/{len(qids)} predictions, {n_with_ctx} with contexts")
+
+        if n_predicted == 0:
+            logger.error(f"  [{action}] No predictions from inference! Subprocess likely failed.")
 
         # Prepare final results
         final_predictions = {}
@@ -489,6 +542,7 @@ class Stage2GeneratorV2:
         final_contexts = {}
 
         cascade_count = 0
+        confidence_sum = 0.0
         retriever_config = {
             'host': self.config['retriever']['host'],
             'port': self.config['retriever']['port']
@@ -510,6 +564,7 @@ class Stage2GeneratorV2:
                 answer=initial_answer,
                 contexts=initial_contexts
             )
+            confidence_sum += confidence
 
             # Check if should cascade
             should_cascade = self.verifier.should_cascade(confidence, strategy=action)
@@ -592,7 +647,8 @@ class Stage2GeneratorV2:
                     dataset=dataset_name,
                 )
 
-        logger.info(f"  Cascade: {cascade_count}/{len(qids)} cascaded ({cascade_count/len(qids)*100:.1f}%)")
+        avg_conf = confidence_sum / len(qids) if qids else 0
+        logger.info(f"  [{action}] Cascade: {cascade_count}/{len(qids)} cascaded ({cascade_count/len(qids)*100:.1f}%), avg_confidence={avg_conf:.3f}")
 
         return {
             'predictions': final_predictions,
@@ -636,19 +692,33 @@ class Stage2GeneratorV2:
         output_file = os.path.join(output_dir, 'predictions.json')
 
         try:
-            # Build command
+            # Build command (match baseline: sys.executable, correct module, --input/--output)
             cmd = [
-                'python', '-m', 'commaqa.inference.prompt_based_inference.configurable_inference',
+                sys.executable, '-m', 'commaqa.inference.configurable_inference',
                 '--config', config_path,
-                '--input_file', input_file,
-                '--output_file', output_file,
+                '--input', input_file,
+                '--output', output_file,
             ]
+
+            # Add parallel processing if configured
+            parallel_threads = self.config.get('execution', {}).get('parallel_threads', 1)
+            if parallel_threads > 1:
+                cmd.extend(['--threads', str(parallel_threads)])
 
             # Prepare environment with retriever config (CRITICAL for ablation experiments)
             env = os.environ.copy()
-            env['RETRIEVER_HOST'] = str(self.config['retriever']['host'])
+            retriever_host = str(self.config['retriever']['host'])
+            if not retriever_host.startswith('http'):
+                retriever_host = f'http://{retriever_host}'
+            env['RETRIEVER_HOST'] = retriever_host
             env['RETRIEVER_PORT'] = str(self.config['retriever']['port'])
             env['DATASET_NAME'] = dataset_name
+
+            llm_host = str(self.config['llm']['server_host'])
+            if not llm_host.startswith('http'):
+                llm_host = f'http://{llm_host}'
+            env['LLM_SERVER_HOST'] = llm_host
+            env['LLM_SERVER_PORT'] = str(self.config['llm']['server_port'])
 
             # Map dataset to corpus name
             dataset_to_corpus = {
@@ -659,7 +729,9 @@ class Stage2GeneratorV2:
             env['CORPUS_NAME'] = dataset_to_corpus.get(dataset_name.lower(), 'wiki')
 
             # Run inference
-            logger.debug(f"Inference config={config_path}, retriever={env['RETRIEVER_HOST']}:{env['RETRIEVER_PORT']}, corpus={env['CORPUS_NAME']}")
+            logger.info(f"  [{action}] Subprocess: {num_questions} questions, "
+                        f"retriever={env['RETRIEVER_HOST']}:{env['RETRIEVER_PORT']}, "
+                        f"threads={parallel_threads}")
             result = subprocess.run(
                 cmd,
                 capture_output=True,
@@ -669,13 +741,14 @@ class Stage2GeneratorV2:
             )
 
             if result.returncode != 0:
-                print(f"    Warning: Inference returned code {result.returncode}")
-                print(f"    stderr: {result.stderr[:500]}")
+                logger.error(f"  [{action}] Subprocess FAILED (code {result.returncode})")
+                logger.error(f"  stderr: {result.stderr[:1000]}")
+                return {'predictions': {}, 'chains': {}, 'contexts': {}}
 
             # Load predictions
             # configurable_inference outputs:
             #   predictions.json          -> {qid: answer_string, ...}
-            #   predictions_contexts.json -> {qid: [context_list], ...}
+            #   predictions_contexts.json -> {qid: {"titles": [...], "paras": [...]}, ...}
             if os.path.exists(output_file):
                 with open(output_file, 'r', encoding='utf-8') as f:
                     predictions_data = json.load(f)
@@ -689,13 +762,32 @@ class Stage2GeneratorV2:
                     predictions[qid] = answer if answer else "I don't know"
                     chains[qid] = ""
 
-                # Load contexts from separate file
+                logger.info(f"  [{action}] Loaded {len(predictions)} predictions")
+
+                # Load and normalize contexts from separate file
+                # configurable_inference outputs: {qid: {"titles": [...], "paras": [...]}}
+                # confidence_verifier expects:    {qid: [{"paragraph_text": "...", "title": "..."}, ...]}
                 contexts_file = output_file.replace('.json', '_contexts.json')
                 if os.path.exists(contexts_file):
                     with open(contexts_file, 'r', encoding='utf-8') as f:
-                        contexts = json.load(f)
+                        raw_contexts = json.load(f)
+
+                    for qid, ctx_data in raw_contexts.items():
+                        if isinstance(ctx_data, dict) and 'paras' in ctx_data:
+                            titles = ctx_data.get('titles', [])
+                            paras = ctx_data.get('paras', [])
+                            contexts[qid] = [
+                                {'paragraph_text': p, 'title': titles[i] if i < len(titles) else ''}
+                                for i, p in enumerate(paras) if p
+                            ]
+                        elif isinstance(ctx_data, list):
+                            contexts[qid] = ctx_data
+                        else:
+                            contexts[qid] = []
+
+                    logger.info(f"  [{action}] Loaded contexts for {len(contexts)} questions")
                 else:
-                    logger.debug("No contexts file found from inference subprocess")
+                    logger.info(f"  [{action}] No contexts file, verifier will use fallback confidence")
                     contexts = {qid: [] for qid in predictions}
 
                 return {
@@ -704,14 +796,16 @@ class Stage2GeneratorV2:
                     'contexts': contexts
                 }
             else:
-                print(f"    Error: Output file not created: {output_file}")
+                logger.error(f"  [{action}] Output file not created: {output_file}")
+                if result.stdout:
+                    logger.debug(f"  stdout (last 500): {result.stdout[-500:]}")
                 return {'predictions': {}, 'chains': {}, 'contexts': {}}
 
         except subprocess.TimeoutExpired:
-            print(f"    Error: Inference timed out after 1 hour")
+            logger.error(f"  [{action}] Inference timed out after 1 hour")
             return {'predictions': {}, 'chains': {}, 'contexts': {}}
         except Exception as e:
-            print(f"    Error running inference: {e}")
+            logger.error(f"  [{action}] Error running inference: {e}")
             import traceback
             traceback.print_exc()
             return {'predictions': {}, 'chains': {}, 'contexts': {}}
