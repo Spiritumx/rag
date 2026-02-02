@@ -724,6 +724,8 @@ class Stage2GeneratorV2:
                 llm_host = f'http://{llm_host}'
             env['LLM_SERVER_HOST'] = llm_host
             env['LLM_SERVER_PORT'] = str(self.config['llm']['server_port'])
+            # Tokenizer needs full local path (model_name alone is not a valid path)
+            env['TOKENIZER_MODEL_NAME'] = str(self.config['llm']['model_path'])
 
             # Map dataset to corpus name
             dataset_to_corpus = {
