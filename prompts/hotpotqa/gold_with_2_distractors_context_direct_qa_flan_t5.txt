@@ -1,41 +1,22 @@
-Please read the following context passages:
+# METADATA: {"qid": "5ab92dba554299131ca422a2"}
+Wikipedia Title: Christopher Nolan
+Sir Christopher Edward Nolan (born 30 July 1970) is a British-American film director, producer, and screenwriter. His films have grossed more than US$6 billion worldwide.
 
----------------------
-Wikipedia Title: [Title 1]
-[Content 1]
+Wikipedia Title: Jeremy Theobald
+Jeremy Theobald (born 20 January 1978) is an English actor and producer, known for his role in Christopher Nolan's debut film Following (1998).
 
-Wikipedia Title: [Title 2]
-[Content 2]
+Q: Answer the following question.
+Jeremy Theobald and Christopher Nolan share what profession?
+A: producer
 
-Wikipedia Title: [Title 3]
-[Content 3]
 
-Wikipedia Title: [Title 4]
-[Content 4]
+# METADATA: {"qid": "5a88f9d55542995153361218"}
+Wikipedia Title: Sponge Cola
+Sponge Cola is a Filipino rock band formed in 2001 in Manila. The band consists of Yael Yuzon, Armo Armovit, Chris Cantada, and Gosh Dilay.
 
-Wikipedia Title: [Title 5]
-[Content 5]
+Wikipedia Title: Hurricane No. 1
+Hurricane No. 1 were an English rock band formed in Oxford in 1996 by Andy Bell. Their debut album "Only the Strongest Will Survive" was released in 1997.
 
-Wikipedia Title: [Title 6]
-[Content 6]
-
-Wikipedia Title: [Title 7]
-[Content 7]
-
-Wikipedia Title: [Title 8]
-[Content 8]
-
-Wikipedia Title: [Title 9]
-[Content 9]
-
-Wikipedia Title: [Title 10]
-[Content 10]
----------------------
-
-Based strictly on the context above, answer the following question.
-
-**IMPORTANT**: Provide a single entity or short phrase as the answer.
-
-Question: [QUESTION]
-
-Answer:
+Q: Answer the following question.
+Which band formed first, Sponge Cola or Hurricane No. 1?
+A: Hurricane No. 1

@@ -1,21 +1,22 @@
-Task: Answer the complex question based on the Investigation Log and Retrieved Documents.
+# METADATA: {"qid": "5ab92dba554299131ca422a2"}
+Wikipedia Title: Christopher Nolan
+Sir Christopher Edward Nolan (born 30 July 1970) is a British-American film director, producer, and screenwriter.
 
-*** LOGICAL BLUEPRINT ***
-{logical_plan}
+Wikipedia Title: Jeremy Theobald
+Jeremy Theobald (born 20 January 1978) is an English actor and producer, known for his role in Christopher Nolan's debut film Following (1998).
 
-*** INVESTIGATION LOG ***
-{investigation_log}
+Q: Answer the following question.
+Jeremy Theobald and Christopher Nolan share what profession?
+A: producer
 
-*** RETRIEVED DOCUMENTS ***
-{context_str}
 
-*** INSTRUCTIONS ***
-1. Follow the Logical Blueprint to synthesize the answer. Complete ALL reasoning steps.
-2. Provide a single entity or short phrase as the answer.
+# METADATA: {"qid": "5a78fe7b55429974737f793b"}
+Wikipedia Title: Nirvana
+Nirvana was an American rock band formed in Aberdeen, Washington, in 1987. It was founded by lead singer and guitarist Kurt Cobain and bassist Krist Novoselic.
 
-*** QUESTION ***
-{query}
+Wikipedia Title: Courtney Love
+Courtney Love is an American singer, songwriter, and actress. She married Kurt Cobain, the lead singer of Nirvana, in 1992.
 
-*** FORMAT ***
-Thought: <analysis>
-Answer: <concise answer>
+Q: Answer the following question.
+Who was married to a founding member of Nirvana?
+A: Courtney Love

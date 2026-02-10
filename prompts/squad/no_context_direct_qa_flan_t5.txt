@@ -1,6 +1,28 @@
-Please answer the following question directly.
+# METADATA: {"qid": "squad_example_1"}
+Q: Answer the following question.
+What is the largest country in the world by area?
+A: Russia
 
-Question:
-[QUESTION]
 
-Answer:
+# METADATA: {"qid": "squad_example_2"}
+Q: Answer the following question.
+Who wrote the novel "1984"?
+A: George Orwell
+
+
+# METADATA: {"qid": "squad_example_3"}
+Q: Answer the following question.
+What year did World War II end?
+A: 1945
+
+
+# METADATA: {"qid": "squad_example_4"}
+Q: Answer the following question.
+What is the capital of France?
+A: Paris
+
+
+# METADATA: {"qid": "squad_example_5"}
+Q: Answer the following question.
+Who painted the Mona Lisa?
+A: Leonardo da Vinci

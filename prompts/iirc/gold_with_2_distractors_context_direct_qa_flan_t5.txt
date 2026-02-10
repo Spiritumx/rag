@@ -1,39 +1,16 @@
-Please read the following context passages:
+# METADATA: {"qid": "iirc_example_1"}
+Wikipedia Title: Amazon River
+The Amazon River in South America is the largest river by discharge volume of water in the world. The river basin covers about 7,000,000 km2 and accounts for roughly one-fifth of the world's total river flow.
 
----------------------
-Wikipedia Title: [Title 1]
-[Content 1]
+Q: Answer the following question.
+What is the largest river by discharge volume?
+A: Amazon River
 
-Wikipedia Title: [Title 2]
-[Content 2]
 
-Wikipedia Title: [Title 3]
-[Content 3]
+# METADATA: {"qid": "iirc_example_2"}
+Wikipedia Title: Marie Curie
+Marie Curie (born Maria Sklodowska; 7 November 1867 – 4 July 1934) was a Polish and naturalized-French physicist and chemist who conducted pioneering research on radioactivity. She was the first woman to win a Nobel Prize.
 
-Wikipedia Title: [Title 4]
-[Content 4]
-
-Wikipedia Title: [Title 5]
-[Content 5]
-
-Wikipedia Title: [Title 6]
-[Content 6]
-
-Wikipedia Title: [Title 7]
-[Content 7]
-
-Wikipedia Title: [Title 8]
-[Content 8]
-
-Wikipedia Title: [Title 9]
-[Content 9]
-
-Wikipedia Title: [Title 10]
-[Content 10]
----------------------
-
-Based strictly on the context above, answer the following question.
-
-Question: [QUESTION]
-
-Answer:
+Q: Answer the following question.
+What field did Marie Curie conduct pioneering research in?
+A: radioactivity

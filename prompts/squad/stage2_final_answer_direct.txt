@@ -1,21 +1,16 @@
-Task: Answer the complex question based on the Investigation Log and Retrieved Documents.
+# METADATA: {"qid": "squad_example_1"}
+Wikipedia Title: Normans
+The Normans were a people who in the 10th and 11th centuries gave their name to Normandy, a region in France. They were descended from Norse raiders and pirates from Denmark, Iceland and Norway.
 
-*** LOGICAL BLUEPRINT ***
-{logical_plan}
+Q: Answer the following question.
+In what country is Normandy located?
+A: France
 
-*** INVESTIGATION LOG ***
-{investigation_log}
 
-*** RETRIEVED DOCUMENTS ***
-{context_str}
+# METADATA: {"qid": "squad_example_2"}
+Wikipedia Title: Oxygen
+Oxygen is a chemical element with symbol O and atomic number 8. By mass, oxygen is the third-most abundant element in the universe, after hydrogen and helium.
 
-*** INSTRUCTIONS ***
-1. Follow the Logical Blueprint to synthesize the answer.
-2. Copy the exact span from the documents. Do NOT paraphrase or rewrite.
-
-*** QUESTION ***
-{query}
-
-*** FORMAT ***
-Thought: <analysis>
-Answer: <concise answer>
+Q: Answer the following question.
+What is the atomic number of oxygen?
+A: 8

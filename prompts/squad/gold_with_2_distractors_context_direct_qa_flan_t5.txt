@@ -1,41 +1,16 @@
-Please read the following context passages:
+# METADATA: {"qid": "squad_example_1"}
+Wikipedia Title: Normans
+The Normans were a people who in the 10th and 11th centuries gave their name to Normandy, a region in France. They were descended from Norse raiders and pirates from Denmark, Iceland and Norway.
 
----------------------
-Wikipedia Title: [Title 1]
-[Content 1]
+Q: Answer the following question.
+In what country is Normandy located?
+A: France
 
-Wikipedia Title: [Title 2]
-[Content 2]
 
-Wikipedia Title: [Title 3]
-[Content 3]
+# METADATA: {"qid": "squad_example_2"}
+Wikipedia Title: Computational complexity theory
+Computational complexity theory is a branch of the theory of computation that focuses on classifying computational problems according to their inherent difficulty, and relating those classes to each other.
 
-Wikipedia Title: [Title 4]
-[Content 4]
-
-Wikipedia Title: [Title 5]
-[Content 5]
-
-Wikipedia Title: [Title 6]
-[Content 6]
-
-Wikipedia Title: [Title 7]
-[Content 7]
-
-Wikipedia Title: [Title 8]
-[Content 8]
-
-Wikipedia Title: [Title 9]
-[Content 9]
-
-Wikipedia Title: [Title 10]
-[Content 10]
----------------------
-
-Based strictly on the context above, answer the following question.
-
-**IMPORTANT**: Copy the exact span from the context. Do NOT paraphrase or summarize.
-
-Question: [QUESTION]
-
-Answer:
+Q: Answer the following question.
+What branch of theoretical computer science deals with broadly classifying computational problems by difficulty and class of relationship?
+A: Computational complexity theory

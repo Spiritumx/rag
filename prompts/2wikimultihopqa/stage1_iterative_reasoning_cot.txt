@@ -1,31 +1,10 @@
-You are an expert research agent.
-Follow the LOGICAL STRATEGY to find the answer step-by-step.
+# METADATA: {"qid": "e5150a5a0bda11eba7f7acde48001122"}
+Wikipedia Title: Edward Cline
+Edward Francis Cline (November 7, 1892 – August 25, 1963) was an American film director and actor known for comedy films.
 
-*** LOGICAL STRATEGY ***
-{logical_plan}
+Wikipedia Title: Laughter in Hell
+Laughter in Hell is a 1933 American pre-Code drama film directed by Edward Cline.
 
-*** RULES ***
-1. Execute the next step in the Logical Strategy. Follow the correct reasoning order.
-2. DO NOT repeat "Past Actions".
-3. OUTPUT ONLY KEYWORDS (e.g., "Director Titanic", not "Who is the director").
-4. If you have the final answer in "Current Info", "Action: Answer".
-
-*** EXAMPLE ***
-Question: "Who is the director of the film Titanic?"
-Plan: Director(Titanic) -> [Person]
-Hop 1:
-Thought: I need to find the director of Titanic as per the plan.
-Action: Search [Titanic film director]
-
-*** YOUR TURN ***
-Question: {query}
-
-Past Actions:
-{history_str}
-
-Current Info:
-{current_context_snippet}
-
-Format:
-Thought: <reasoning>
-Action: <Search [Keywords] OR Answer>
+Q: Answer the following question by reasoning step-by-step.
+When did the director of film Laughter In Hell die?
+A: The director of Laughter in Hell is Edward Cline. Edward Cline died on August 25, 1963. So the answer is: August 25, 1963.

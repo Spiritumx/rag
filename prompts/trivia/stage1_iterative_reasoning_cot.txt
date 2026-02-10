@@ -1,31 +1,7 @@
-You are an expert research agent.
-Follow the LOGICAL STRATEGY to find the answer step-by-step.
+# METADATA: {"qid": "trivia_example_1"}
+Wikipedia Title: Pacific Ocean
+The Pacific Ocean is the largest and deepest of Earth's five oceanic divisions. It extends from the Arctic Ocean in the north to the Southern Ocean in the south.
 
-*** LOGICAL STRATEGY ***
-{logical_plan}
-
-*** RULES ***
-1. Execute the next step in the Logical Strategy.
-2. DO NOT repeat "Past Actions".
-3. OUTPUT ONLY KEYWORDS (e.g., "Director Titanic", not "Who is the director").
-4. If you have the final answer in "Current Info", "Action: Answer".
-
-*** EXAMPLE ***
-Question: "Who is the director of the film Titanic?"
-Plan: Director(Titanic) -> [Person]
-Hop 1:
-Thought: I need to find the director of Titanic as per the plan.
-Action: Search [Titanic film director]
-
-*** YOUR TURN ***
-Question: {query}
-
-Past Actions:
-{history_str}
-
-Current Info:
-{current_context_snippet}
-
-Format:
-Thought: <reasoning>
-Action: <Search [Keywords] OR Answer>
+Q: Answer the following question by reasoning step-by-step.
+What is the world's largest ocean?
+A: The Pacific Ocean is described as the largest of Earth's oceanic divisions. So the answer is: Pacific Ocean.

@@ -1,41 +1,16 @@
-Please read the following context passages:
+# METADATA: {"qid": "trivia_example_1"}
+Wikipedia Title: Pacific Ocean
+The Pacific Ocean is the largest and deepest of Earth's five oceanic divisions. It extends from the Arctic Ocean in the north to the Southern Ocean in the south, bounded by Asia and Australia in the west and the Americas in the east.
 
----------------------
-Wikipedia Title: [Title 1]
-[Content 1]
+Q: Answer the following question.
+What is the world's largest ocean?
+A: Pacific Ocean
 
-Wikipedia Title: [Title 2]
-[Content 2]
 
-Wikipedia Title: [Title 3]
-[Content 3]
+# METADATA: {"qid": "trivia_example_2"}
+Wikipedia Title: Sistine Chapel ceiling
+The Sistine Chapel ceiling, painted by Michelangelo between 1508 and 1512, is one of the most renowned artworks of the High Renaissance. It was commissioned by Pope Julius II.
 
-Wikipedia Title: [Title 4]
-[Content 4]
-
-Wikipedia Title: [Title 5]
-[Content 5]
-
-Wikipedia Title: [Title 6]
-[Content 6]
-
-Wikipedia Title: [Title 7]
-[Content 7]
-
-Wikipedia Title: [Title 8]
-[Content 8]
-
-Wikipedia Title: [Title 9]
-[Content 9]
-
-Wikipedia Title: [Title 10]
-[Content 10]
----------------------
-
-Based strictly on the context above, answer the following question.
-
-**IMPORTANT**: Provide only a brief entity or noun phrase (e.g., "Paris", "Albert Einstein"). Do NOT use complete sentences.
-
-Question: [QUESTION]
-
-Answer:
+Q: Answer the following question.
+Who painted the Sistine Chapel ceiling?
+A: Michelangelo

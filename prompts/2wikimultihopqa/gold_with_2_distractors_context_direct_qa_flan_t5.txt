@@ -1,41 +1,22 @@
-Please read the following context passages:
+# METADATA: {"qid": "e5150a5a0bda11eba7f7acde48001122"}
+Wikipedia Title: Edward Cline
+Edward Francis Cline (November 7, 1892 – August 25, 1963) was an American film director and actor known for comedy films.
 
----------------------
-Wikipedia Title: [Title 1]
-[Content 1]
+Wikipedia Title: Laughter in Hell
+Laughter in Hell is a 1933 American pre-Code drama film directed by Edward Cline.
 
-Wikipedia Title: [Title 2]
-[Content 2]
+Q: Answer the following question.
+When did the director of film Laughter In Hell die?
+A: August 25, 1963
 
-Wikipedia Title: [Title 3]
-[Content 3]
 
-Wikipedia Title: [Title 4]
-[Content 4]
+# METADATA: {"qid": "35bf3490096d11ebbdafac1f6bf848b6"}
+Wikipedia Title: Kurram Garhi
+Kurram Garhi is a small village located in Bannu District, Khyber Pakhtunkhwa, Pakistan.
 
-Wikipedia Title: [Title 5]
-[Content 5]
+Wikipedia Title: Trojkrsti
+Trojkrsti is a village in the municipality of Novaci, North Macedonia.
 
-Wikipedia Title: [Title 6]
-[Content 6]
-
-Wikipedia Title: [Title 7]
-[Content 7]
-
-Wikipedia Title: [Title 8]
-[Content 8]
-
-Wikipedia Title: [Title 9]
-[Content 9]
-
-Wikipedia Title: [Title 10]
-[Content 10]
----------------------
-
-Based strictly on the context above, answer the following question.
-
-**IMPORTANT**: Provide a standardized entity name (e.g., use official names for people, places, organizations).
-
-Question: [QUESTION]
-
-Answer:
+Q: Answer the following question.
+Are both Kurram Garhi and Trojkrsti located in the same country?
+A: no

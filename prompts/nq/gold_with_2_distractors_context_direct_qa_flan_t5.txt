@@ -1,41 +1,16 @@
-Please read the following context passages:
+# METADATA: {"qid": "nq_example_1"}
+Wikipedia Title: Apollo 11
+Apollo 11 was the American spaceflight that first landed humans on the Moon. Commander Neil Armstrong and lunar module pilot Buzz Aldrin landed the Apollo Lunar Module Eagle on July 20, 1969.
 
----------------------
-Wikipedia Title: [Title 1]
-[Content 1]
+Q: Answer the following question.
+Who was the first person to walk on the moon?
+A: Neil Armstrong
 
-Wikipedia Title: [Title 2]
-[Content 2]
 
-Wikipedia Title: [Title 3]
-[Content 3]
+# METADATA: {"qid": "nq_example_2"}
+Wikipedia Title: Tokyo
+Tokyo, officially the Tokyo Metropolis, is the capital and most populous city of Japan. It is the seat of the Emperor of Japan, the Japanese government, and the National Diet.
 
-Wikipedia Title: [Title 4]
-[Content 4]
-
-Wikipedia Title: [Title 5]
-[Content 5]
-
-Wikipedia Title: [Title 6]
-[Content 6]
-
-Wikipedia Title: [Title 7]
-[Content 7]
-
-Wikipedia Title: [Title 8]
-[Content 8]
-
-Wikipedia Title: [Title 9]
-[Content 9]
-
-Wikipedia Title: [Title 10]
-[Content 10]
----------------------
-
-Based strictly on the context above, answer the following question.
-
-**IMPORTANT**: Provide a precise, short answer (entity or phrase) that directly addresses the question. Avoid over-generalization.
-
-Question: [QUESTION]
-
-Answer:
+Q: Answer the following question.
+What is the capital of Japan?
+A: Tokyo
