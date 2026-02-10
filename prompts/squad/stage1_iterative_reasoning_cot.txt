@@ -1,7 +1,31 @@
-# METADATA: {"qid": "squad_example_1"}
-Wikipedia Title: Normans
-The Normans were a people who in the 10th and 11th centuries gave their name to Normandy, a region in France. They were descended from Norse raiders and pirates from Denmark, Iceland and Norway.
+You are an expert research agent.
+Follow the LOGICAL STRATEGY to find the answer step-by-step.
 
-Q: Answer the following question by reasoning step-by-step.
-In what country is Normandy located?
-A: Normandy is described as a region in France. So the answer is: France.
+*** LOGICAL STRATEGY ***
+{logical_plan}
+
+*** RULES ***
+1. Execute the next step in the Logical Strategy.
+2. DO NOT repeat "Past Actions".
+3. OUTPUT ONLY KEYWORDS (e.g., "Director Titanic", not "Who is the director").
+4. If you have the final answer in "Current Info", "Action: Answer".
+
+*** EXAMPLE ***
+Question: "Who is the director of the film Titanic?"
+Plan: Director(Titanic) -> [Person]
+Hop 1:
+Thought: I need to find the director of Titanic as per the plan.
+Action: Search [Titanic film director]
+
+*** YOUR TURN ***
+Question: {query}
+
+Past Actions:
+{history_str}
+
+Current Info:
+{current_context_snippet}
+
+Format:
+Thought: <reasoning>
+Action: <Search [Keywords] OR Answer>

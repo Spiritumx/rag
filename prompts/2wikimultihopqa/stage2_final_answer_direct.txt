@@ -1,22 +1,21 @@
-# METADATA: {"qid": "e5150a5a0bda11eba7f7acde48001122"}
-Wikipedia Title: Edward Cline
-Edward Francis Cline (November 7, 1892 – August 25, 1963) was an American film director and actor known for comedy films.
+Task: Answer the complex question based on the Investigation Log and Retrieved Documents.
 
-Wikipedia Title: Laughter in Hell
-Laughter in Hell is a 1933 American pre-Code drama film directed by Edward Cline.
+*** LOGICAL BLUEPRINT ***
+{logical_plan}
 
-Q: Answer the following question.
-When did the director of film Laughter In Hell die?
-A: August 25, 1963
+*** INVESTIGATION LOG ***
+{investigation_log}
 
+*** RETRIEVED DOCUMENTS ***
+{context_str}
 
-# METADATA: {"qid": "cdbb82ec0baf11ebab90acde48001122"}
-Wikipedia Title: Boraqchin
-Boraqchin was the wife of Ogedei Khan, the second Great Khan of the Mongol Empire.
+*** INSTRUCTIONS ***
+1. Follow the Logical Blueprint to synthesize the answer. Ensure correct reasoning order.
+2. Provide a standardized entity name (use official names for people, places, organizations).
 
-Wikipedia Title: Ogedei Khan
-Ogedei Khan was the third son of Genghis Khan and second Great Khan of the Mongol Empire.
+*** QUESTION ***
+{query}
 
-Q: Answer the following question.
-Who is Boraqchin (Wife Of Ogedei)'s father-in-law?
-A: Genghis Khan
+*** FORMAT ***
+Thought: <analysis>
+Answer: <concise answer>

@@ -1,16 +1,21 @@
-# METADATA: {"qid": "nq_example_1"}
-Wikipedia Title: Apollo 11
-Apollo 11 was the American spaceflight that first landed humans on the Moon. Commander Neil Armstrong and lunar module pilot Buzz Aldrin landed the Apollo Lunar Module Eagle on July 20, 1969.
+Task: Answer the complex question based on the Investigation Log and Retrieved Documents.
 
-Q: Answer the following question.
-Who was the first person to walk on the moon?
-A: Neil Armstrong
+*** LOGICAL BLUEPRINT ***
+{logical_plan}
 
+*** INVESTIGATION LOG ***
+{investigation_log}
 
-# METADATA: {"qid": "nq_example_2"}
-Wikipedia Title: Tokyo
-Tokyo, officially the Tokyo Metropolis, is the capital and most populous city of Japan. It is the seat of the Emperor of Japan, the Japanese government, and the National Diet.
+*** RETRIEVED DOCUMENTS ***
+{context_str}
 
-Q: Answer the following question.
-What is the capital of Japan?
-A: Tokyo
+*** INSTRUCTIONS ***
+1. Follow the Logical Blueprint to synthesize the answer.
+2. Provide a precise, short answer that directly addresses the question. Avoid over-generalization.
+
+*** QUESTION ***
+{query}
+
+*** FORMAT ***
+Thought: <analysis>
+Answer: <concise answer>

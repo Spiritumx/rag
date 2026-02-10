@@ -1,22 +1,21 @@
-# METADATA: {"qid": "2hop__292995_8796"}
-Wikipedia Title: Neville A. Stanton
-Neville A. Stanton is a British professor of human factors and ergonomics at the University of Southampton.
+Task: Answer the complex question based on the Investigation Log and Retrieved Documents.
 
-Wikipedia Title: University of Southampton
-The University of Southampton is a public research university in Southampton, England. It was founded in 1862 as the Hartley Institution.
+*** LOGICAL BLUEPRINT ***
+{logical_plan}
 
-Q: Answer the following question.
-When was Neville A. Stanton's employer founded?
-A: 1862
+*** INVESTIGATION LOG ***
+{investigation_log}
 
+*** RETRIEVED DOCUMENTS ***
+{context_str}
 
-# METADATA: {"qid": "2hop__387702_20661"}
-Wikipedia Title: Hoora
-Hoora is a town in the Capital Governorate of Bahrain.
+*** INSTRUCTIONS ***
+1. Follow the Logical Blueprint to synthesize the answer. Integrate evidence from ALL retrieved documents.
+2. Provide a precise entity or short text answer.
 
-Wikipedia Title: Bahrain
-Bahrain gained independence from Britain on 15 August 1971.
+*** QUESTION ***
+{query}
 
-Q: Answer the following question.
-When did Britain withdraw from the country containing Hoora?
-A: 1971
+*** FORMAT ***
+Thought: <analysis>
+Answer: <concise answer>

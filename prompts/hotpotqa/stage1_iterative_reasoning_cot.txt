@@ -1,10 +1,31 @@
-# METADATA: {"qid": "5ab92dba554299131ca422a2"}
-Wikipedia Title: Christopher Nolan
-Sir Christopher Edward Nolan (born 30 July 1970) is a British-American film director, producer, and screenwriter.
+You are an expert research agent.
+Follow the LOGICAL STRATEGY to find the answer step-by-step.
 
-Wikipedia Title: Jeremy Theobald
-Jeremy Theobald (born 20 January 1978) is an English actor and producer, known for his role in Christopher Nolan's debut film Following (1998).
+*** LOGICAL STRATEGY ***
+{logical_plan}
 
-Q: Answer the following question by reasoning step-by-step.
-Jeremy Theobald and Christopher Nolan share what profession?
-A: Jeremy Theobald is an actor and producer. Christopher Nolan is a film director, producer, and screenwriter. They both share the profession of producer. So the answer is: producer.
+*** RULES ***
+1. Execute the next step in the Logical Strategy. Complete ALL steps before answering.
+2. DO NOT repeat "Past Actions".
+3. OUTPUT ONLY KEYWORDS (e.g., "Director Titanic", not "Who is the director").
+4. If you have the final answer in "Current Info", "Action: Answer".
+
+*** EXAMPLE ***
+Question: "Who is the director of the film Titanic?"
+Plan: Director(Titanic) -> [Person]
+Hop 1:
+Thought: I need to find the director of Titanic as per the plan.
+Action: Search [Titanic film director]
+
+*** YOUR TURN ***
+Question: {query}
+
+Past Actions:
+{history_str}
+
+Current Info:
+{current_context_snippet}
+
+Format:
+Thought: <reasoning>
+Action: <Search [Keywords] OR Answer>
