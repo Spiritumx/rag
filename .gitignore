@@ -7,3 +7,10 @@ retriever_server/model/*
 !.pixi/config.toml
 pixi.lock
 *.pyc
+evaluate/outputs
+evaluate/reader*
+evaluate/upper_bound_analysis/outputs
+evaluate/upper_bound_analysis/agent_reasoning_check/outputs
+evaluate/upper_bound_analysis/retriever_recall_upperbound/outputs
+adaptive_rag/evaluate/outputs
+innovation_experiments/evaluate_v2/outputs_v2
