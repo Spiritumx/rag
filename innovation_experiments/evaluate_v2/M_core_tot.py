@@ -608,7 +608,7 @@ Output:"""
 
             # 如果覆盖了大部分规划步骤，可以尝试回答
             if len(plan_parts) > 0 and covered_parts >= len(plan_parts) * 0.7:
-                logger.debug(f"[ToT] Plan coverage: {covered_parts}/{len(plan_parts)}, ready to answer")
+                logger.info(f"[ToT] Plan coverage: {covered_parts}/{len(plan_parts)}, ready to answer")
                 return True
 
         return False
@@ -714,7 +714,7 @@ Output:"""
 
             # 所有 beam 节点都已满足回答条件，无需继续扩展
             if not any_expanded:
-                logger.debug(f"[ToT] All beam nodes can answer at depth {depth}, stopping early")
+                logger.info(f"[ToT] All beam nodes can answer at depth {depth}, stopping early")
                 self.reasoning_chain.append(f"[ToT] Early stop: all nodes ready at depth {depth}")
                 break
 
