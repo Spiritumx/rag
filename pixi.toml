@@ -47,6 +47,7 @@ fsspec = "<=2025.9.0"
 tensorboard = ">=2.20.0,<3"
 spacy = "*"
 nltk = "*"
+numpy = "*"
 
 [target.linux-64.dependencies]
 cuda-version = "13.0.*"
