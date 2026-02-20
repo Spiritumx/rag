@@ -582,6 +582,10 @@ Output:"""
         Returns:
             True if node can answer, False otherwise
         """
+        # 至少完成一轮扩展才考虑提前终止（root 节点不应终止）
+        if node.depth < 1:
+            return False
+
         all_contexts = node.get_all_contexts()
         if len(all_contexts) < 2:
             return False  # Need at least 2 documents for multi-hop
@@ -591,7 +595,7 @@ Output:"""
             return True  # Force answer at max depth
 
         # 检查是否覆盖了逻辑规划中的关键步骤
-        if self.logical_plan:
+        if self.logical_plan and '->' in self.logical_plan:
             plan_parts = [p.strip().lower() for p in self.logical_plan.split('->')]
             covered_parts = 0
             context_text = " ".join([c.get('paragraph_text', '').lower() for c in all_contexts])
@@ -599,7 +603,7 @@ Output:"""
             for part in plan_parts:
                 # 简单检查：规划中的关键词是否出现在上下文中
                 part_words = set(part.split())
-                if part_words and len(part_words.intersection(set(context_text.split()))) >= len(part_words) // 2:
+                if part_words and len(part_words.intersection(set(context_text.split()))) >= max(1, len(part_words) // 2):
                     covered_parts += 1
 
             # 如果覆盖了大部分规划步骤，可以尝试回答
@@ -607,8 +611,7 @@ Output:"""
                 logger.debug(f"[ToT] Plan coverage: {covered_parts}/{len(plan_parts)}, ready to answer")
                 return True
 
-        # Fallback: 足够的上下文数量
-        return len(all_contexts) >= 6
+        return False
 
     def search(self, question: str) -> Dict:
         """
@@ -650,15 +653,17 @@ Output:"""
         for depth in range(1, self.max_depth + 1):
             logger.debug(f"[ToT] Depth {depth}: Expanding {len(current_beam)} nodes...")
             candidates = []
+            any_expanded = False
 
             # Expand each node in current beam
             for node_idx, node in enumerate(current_beam):
-                # Check if this node can answer
+                # Check if this node can answer — skip further expansion
                 if self._can_answer_question(node, question):
-                    logger.debug(f"[ToT] Node {node_idx} can answer at depth {depth}")
-                    # Keep it as a candidate to potentially be selected
-                    # But also try to expand it to see if we can get better answer
+                    logger.debug(f"[ToT] Node {node_idx} can answer at depth {depth}, skipping expansion")
+                    candidates.append(node)
+                    continue
 
+                any_expanded = True
                 # Generate k candidate next queries
                 candidate_queries = self._generate_candidate_queries(question, node, self.candidates_per_node)
 
@@ -706,6 +711,12 @@ Output:"""
             # Log top beam nodes
             for i, node in enumerate(current_beam):
                 self.reasoning_chain.append(f"  Beam[{i}]: Score={node.score:.3f}, Query='{node.query[:50]}'")
+
+            # 所有 beam 节点都已满足回答条件，无需继续扩展
+            if not any_expanded:
+                logger.debug(f"[ToT] All beam nodes can answer at depth {depth}, stopping early")
+                self.reasoning_chain.append(f"[ToT] Early stop: all nodes ready at depth {depth}")
+                break
 
         # Select best node from final beam
         if not current_beam:

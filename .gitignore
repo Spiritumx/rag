@@ -14,3 +14,6 @@ evaluate/upper_bound_analysis/agent_reasoning_check/outputs
 evaluate/upper_bound_analysis/retriever_recall_upperbound/outputs
 adaptive_rag/evaluate/outputs
 innovation_experiments/evaluate_v2/outputs_v2
+innovation_experiments/ablation_results
+thesis/
+classifier/data/training_data
