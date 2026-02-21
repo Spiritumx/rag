@@ -157,10 +157,11 @@ class ConfidenceVerifier:
         if not scores:
             confidence = 0.0
         else:
-            confidence = max(scores)
-
-        # Normalize to [0, 1] range (cross-encoder scores can be outside this range)
-        confidence = max(0.0, min(1.0, confidence))
+            import math
+            raw_max = max(scores)
+            # Sigmoid 归一化：将 cross-encoder 原始 logit 映射到 (0, 1)
+            # 避免硬截断导致负分全部变为 0.0
+            confidence = 1.0 / (1.0 + math.exp(-raw_max))
 
         if return_detailed:
             return {
