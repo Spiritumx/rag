@@ -33,38 +33,43 @@ print("2. S-Sparse 缓存内容")
 print("=" * 70)
 
 cache_file = os.path.join(cache_dir, "squad_S-Sparse_8002_inference.json")
+cache_data = None
+cache_pred_keys = []
+cache_ctx_keys = []
+
 if not os.path.exists(cache_file):
-    print(f"缓存文件不存在: {cache_file}")
+    print(f"!!! 缓存文件不存在: {cache_file}")
+    print("!!! 非 M 策略的 inference 结果从未被缓存!")
     print("尝试其他可能的文件名:")
     for f in glob.glob(os.path.join(cache_dir, "*squad*")):
         print(f"  找到: {os.path.basename(f)}")
-    exit(1)
+    print("\n=> 这意味着每个 Model 独立运行 subprocess，结果未共享")
+else:
+    with open(cache_file, "r", encoding="utf-8") as f:
+        cache_data = json.load(f)
 
-with open(cache_file, "r", encoding="utf-8") as f:
-    cache_data = json.load(f)
+    cache_pred_keys = list(cache_data['predictions'].keys())
+    cache_ctx_keys = list(cache_data.get('contexts', {}).keys())
 
-cache_pred_keys = list(cache_data['predictions'].keys())
-cache_ctx_keys = list(cache_data.get('contexts', {}).keys())
+    print(f"predictions 数量: {len(cache_pred_keys)}")
+    print(f"contexts 数量:    {len(cache_ctx_keys)}")
+    print(f"chains 数量:      {len(cache_data.get('chains', {}))}")
+    print(f"\n前5个 prediction keys: {cache_pred_keys[:5]}")
+    print(f"前5个 context keys:    {cache_ctx_keys[:5]}")
 
-print(f"predictions 数量: {len(cache_pred_keys)}")
-print(f"contexts 数量:    {len(cache_ctx_keys)}")
-print(f"chains 数量:      {len(cache_data.get('chains', {}))}")
-print(f"\n前5个 prediction keys: {cache_pred_keys[:5]}")
-print(f"前5个 context keys:    {cache_ctx_keys[:5]}")
+    # 检查 predictions 内容
+    print(f"\n前3个 prediction 内容:")
+    for i, (qid, answer) in enumerate(cache_data['predictions'].items()):
+        if i >= 3:
+            break
+        ans_str = answer if answer else "<EMPTY>"
+        print(f"  key={qid!r}")
+        print(f"  val=[{ans_str[:100]}]")
 
-# 检查 predictions 内容
-print(f"\n前3个 prediction 内容:")
-for i, (qid, answer) in enumerate(cache_data['predictions'].items()):
-    if i >= 3:
-        break
-    ans_str = answer if answer else "<EMPTY>"
-    print(f"  key={qid!r}")
-    print(f"  val=[{ans_str[:100]}]")
-
-# 检查 prediction 中 "I don't know" 的数量
-idk_count = sum(1 for a in cache_data['predictions'].values()
-                if a.strip().lower() in ("i don't know", "i don't know.", ""))
-print(f"\n'I don't know' 或空答案数量: {idk_count}/{len(cache_pred_keys)}")
+    # 检查 prediction 中 "I don't know" 的数量
+    idk_count = sum(1 for a in cache_data['predictions'].values()
+                    if a.strip().lower() in ("i don't know", "i don't know.", ""))
+    print(f"\n'I don't know' 或空答案数量: {idk_count}/{len(cache_pred_keys)}")
 
 # ============================================================================
 # 3. 加载 classification 文件
@@ -117,45 +122,46 @@ print("\n" + "=" * 70)
 print("4. KEY 匹配检查 (核心诊断)")
 print("=" * 70)
 
+common = set()  # for summary section
 if classif_keys is not None:
-    cache_key_set = set(cache_pred_keys)
-    classif_key_set = set(classif_s_sparse_keys)
+    if cache_data is not None:
+        cache_key_set = set(cache_pred_keys)
+        classif_key_set = set(classif_s_sparse_keys)
 
-    common = cache_key_set & classif_key_set
-    only_in_cache = cache_key_set - classif_key_set
-    only_in_classif = classif_key_set - cache_key_set
+        common = cache_key_set & classif_key_set
+        only_in_cache = cache_key_set - classif_key_set
+        only_in_classif = classif_key_set - cache_key_set
 
-    print(f"缓存 predictions keys:  {len(cache_key_set)}")
-    print(f"分类 S-Sparse keys:     {len(classif_key_set)}")
-    print(f"交集 (匹配):            {len(common)}")
-    print(f"仅在缓存中:             {len(only_in_cache)}")
-    print(f"仅在分类中:             {len(only_in_classif)}")
+        print(f"缓存 predictions keys:  {len(cache_key_set)}")
+        print(f"分类 S-Sparse keys:     {len(classif_key_set)}")
+        print(f"交集 (匹配):            {len(common)}")
+        print(f"仅在缓存中:             {len(only_in_cache)}")
+        print(f"仅在分类中:             {len(only_in_classif)}")
 
-    if len(common) == 0 and len(cache_key_set) > 0 and len(classif_key_set) > 0:
-        print("\n!!! KEY 完全不匹配 — 这就是 EM=0 的根本原因 !!!")
-        print("\n示例对比:")
-        sample_cache = list(only_in_cache)[:3]
-        sample_classif = list(only_in_classif)[:3]
-        for c, cl in zip(sample_cache, sample_classif):
-            print(f"  cache key:  {c!r}  (type={type(c).__name__}, len={len(c)})")
-            print(f"  classif key:{cl!r}  (type={type(cl).__name__}, len={len(cl)})")
-            # 检查是否有公共子串
-            if c in cl:
-                print(f"  => cache key 是 classif key 的子串!")
-            elif cl in c:
-                print(f"  => classif key 是 cache key 的子串!")
-            print()
-    elif len(common) < len(classif_key_set):
-        print(f"\n部分匹配 — {len(classif_key_set) - len(common)} 个 S-Sparse 问题在缓存中找不到")
-        missing_examples = list(only_in_classif)[:3]
-        print(f"缺失示例: {missing_examples}")
+        if len(common) == 0 and len(cache_key_set) > 0 and len(classif_key_set) > 0:
+            print("\n!!! KEY 完全不匹配 — 这就是 EM=0 的根本原因 !!!")
+            print("\n示例对比:")
+            sample_cache = list(only_in_cache)[:3]
+            sample_classif = list(only_in_classif)[:3]
+            for c, cl in zip(sample_cache, sample_classif):
+                print(f"  cache key:  {c!r}  (type={type(c).__name__}, len={len(c)})")
+                print(f"  classif key:{cl!r}  (type={type(cl).__name__}, len={len(cl)})")
+                if c in cl:
+                    print(f"  => cache key 是 classif key 的子串!")
+                elif cl in c:
+                    print(f"  => classif key 是 cache key 的子串!")
+                print()
+        elif len(common) < len(classif_key_set):
+            print(f"\n部分匹配 — {len(classif_key_set) - len(common)} 个 S-Sparse 问题在缓存中找不到")
+        else:
+            print("\n✓ 所有 S-Sparse 分类 keys 在缓存中都有匹配")
+
+        cache_ctx_set = set(cache_ctx_keys)
+        ctx_common = cache_ctx_set & classif_key_set
+        print(f"\ncontext keys 与 S-Sparse keys 交集: {len(ctx_common)}")
     else:
-        print("\n✓ 所有 S-Sparse 分类 keys 在缓存中都有匹配")
-
-    # 额外检查: context keys 是否也匹配
-    cache_ctx_set = set(cache_ctx_keys)
-    ctx_common = cache_ctx_set & classif_key_set
-    print(f"\ncontext keys 与 S-Sparse keys 交集: {len(ctx_common)}")
+        print("缓存文件不存在，跳过 key 匹配检查")
+        print("需要直接检查 Model A 和 Model C 的预测文件来诊断")
 
 # ============================================================================
 # 5. Model A 最终预测
@@ -272,7 +278,9 @@ print("8. 诊断总结")
 print("=" * 70)
 
 issues = []
-if classif_keys is not None and len(common) == 0 and len(cache_key_set) > 0:
+if cache_data is None:
+    issues.append("WARNING: 非 M 策略的 inference 缓存不存在 — 每个 Model 独立跑 subprocess")
+if classif_keys is not None and cache_data is not None and len(common) == 0 and len(set(cache_pred_keys)) > 0:
     issues.append("CRITICAL: Cache keys 与 Classification keys 完全不匹配")
 if os.path.exists(pred_file_a):
     if idk_a > len(preds_a) * 0.5:
