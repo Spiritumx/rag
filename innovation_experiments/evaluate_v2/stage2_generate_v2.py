@@ -511,6 +511,10 @@ class Stage2GeneratorV2:
             # Only cache successful results (non-empty predictions)
             if initial_result['predictions']:
                 self._save_cache(inference_cache_key, initial_result)
+            else:
+                logger.error(f"  [{action}] Subprocess returned 0 predictions — NOT caching")
+                logger.error(f"  [{action}] Config: {config_path}")
+                logger.error(f"  [{action}] Check retriever (port {self.config['retriever']['port']}) and LLM server")
 
         # Step 2: Posterior verification (if enabled)
         if not self.cascade_enabled:
@@ -537,6 +541,8 @@ class Stage2GeneratorV2:
 
         if n_predicted == 0:
             logger.error(f"  [{action}] No predictions from inference! Subprocess likely failed.")
+            logger.error(f"  [{action}] Returning empty result (same as cascade-disabled behavior)")
+            return initial_result  # Return empty dict, don't fill with "I don't know"
 
         # Prepare final results
         final_predictions = {}
@@ -554,10 +560,18 @@ class Stage2GeneratorV2:
             'port': self.config['llm']['server_port']
         }
 
-        # Verify each prediction
+        # Verify each prediction (only process qids that have predictions)
         for qid in qids:
             question_text = test_data_map[qid]['question_text']
-            initial_answer = initial_result['predictions'].get(qid, "I don't know")
+
+            # Skip qids missing from subprocess output instead of filling "I don't know"
+            if qid not in initial_result['predictions']:
+                logger.warning(f"  [{action}] qid {qid} missing from predictions, skipping")
+                continue
+
+            initial_answer = initial_result['predictions'][qid]
+            if not initial_answer:
+                initial_answer = "I don't know"
             initial_contexts = initial_result['contexts'].get(qid, [])
 
             # Verify confidence
@@ -749,8 +763,15 @@ class Stage2GeneratorV2:
 
             if result.returncode != 0:
                 logger.error(f"  [{action}] Subprocess FAILED (code {result.returncode})")
-                logger.error(f"  stderr: {result.stderr[:1000]}")
+                logger.error(f"  stderr: {result.stderr[:2000]}")
+                logger.error(f"  stdout (last 500): {result.stdout[-500:] if result.stdout else '<empty>'}")
                 return {'predictions': {}, 'chains': {}, 'contexts': {}}
+
+            # Log stderr even on success (may contain warnings)
+            if result.stderr and len(result.stderr.strip()) > 0:
+                stderr_lines = [l for l in result.stderr.strip().split('\n') if 'error' in l.lower() or 'exception' in l.lower()]
+                if stderr_lines:
+                    logger.warning(f"  [{action}] Subprocess stderr errors: {stderr_lines[:3]}")
 
             # Load predictions
             # configurable_inference outputs:
