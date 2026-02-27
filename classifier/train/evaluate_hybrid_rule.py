@@ -159,7 +159,8 @@ def main():
     print(classification_report(y_true_coarse, y_pred_coarse, labels=labels_coarse, digits=4))
 
     print("\n[Confusion Matrix (Coarse)]")
-    print(f"{'True \\ Pred':<12} {'Z':<8} {'S':<8} {'M':<8}")
+    header = "True \\ Pred"
+    print(f"{header:<12} {'Z':<8} {'S':<8} {'M':<8}")
     cm = confusion_matrix(y_true_coarse, y_pred_coarse, labels=labels_coarse)
     for idx, label in enumerate(labels_coarse):
         print(f"{label:<12} {cm[idx][0]:<8} {cm[idx][1]:<8} {cm[idx][2]:<8}")
