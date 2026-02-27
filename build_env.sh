@@ -3,7 +3,6 @@
 # source /etc/network_turbo
 
 # git clone https://github.com/Spiritum-coder/graduateRAG.git
-# token ***REMOVED***
 
 
 

@@ -9,16 +9,28 @@ os.environ["TRANSFORMERS_OFFLINE"] = "1"
 import torch
 import re
 import json
+import argparse
 from datasets import load_dataset
 from unsloth import FastLanguageModel
 from tqdm import tqdm
 from collections import Counter
 
-# --- 路径配置 (请确保与训练时一致) ---
-LORA_MODEL_DIR = "/root/autodl-tmp/output/Qwen2.5-3B-RAG-Router/lora_model"
-BASE_MODEL_PATH = "/root/autodl-tmp/model/Qwen2.5-3B-Instruct"
-DATA_FILE = "/root/graduateRAG/classifier/data/training_data/final_finetuning_dataset.jsonl"
-MAX_SEQ_LENGTH = 2048
+# --- 路径配置（可通过命令行参数覆盖）---
+_DEFAULT_LORA   = "/root/autodl-tmp/output/Qwen2.5-3B-RAG-Router/lora_model"
+_DEFAULT_BASE   = "/root/autodl-tmp/model/Qwen2.5-3B-Instruct"
+_DEFAULT_DATA   = "/root/graduateRAG/classifier/data/training_data/final_finetuning_dataset.jsonl"
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--lora",  default=_DEFAULT_LORA,  help="LoRA 模型目录")
+parser.add_argument("--base",  default=_DEFAULT_BASE,  help="Base 模型路径")
+parser.add_argument("--data",  default=_DEFAULT_DATA,  help="数据文件路径")
+parser.add_argument("--tag",   default="",             help="结果文件后缀标识")
+_args, _ = parser.parse_known_args()
+
+LORA_MODEL_DIR = _args.lora
+BASE_MODEL_PATH = _args.base
+DATA_FILE       = _args.data
+MAX_SEQ_LENGTH  = 2048
 
 SYSTEM_PROMPT = """You are an expert RAG router. Analyze the user query complexity and determine the optimal retrieval strategy.
 Output the analysis in the following format:
@@ -224,7 +236,8 @@ def main():
         print(f"\nWarning: {unknown_count} samples could not be parsed (Unknown).")
 
     # 保存结果
-    output_log = os.path.join(os.path.dirname(DATA_FILE), "evaluation_results_hybrid_rule.json")
+    suffix = f"_{_args.tag}" if _args.tag else ""
+    output_log = os.path.join(os.path.dirname(DATA_FILE), f"evaluation_results_hybrid_rule{suffix}.json")
     with open(output_log, 'w') as f:
         json.dump({
             "coarse_accuracy": acc_c,
