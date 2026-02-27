@@ -86,20 +86,33 @@ def map_to_coarse(label):
 def main():
     print(f"🚀 Loading LoRA from {LORA_MODEL_DIR}...")
 
+    # 临时将 adapter_config.json 里的 base_model 路径改为本地路径，
+    # 避免 from_pretrained 去联网解析远程路径，同时绕开 load_adapter 的 bug
+    adapter_config_path = os.path.join(LORA_MODEL_DIR, "adapter_config.json")
+    with open(adapter_config_path, "r") as f:
+        adapter_cfg = json.load(f)
+    original_base = adapter_cfg.get("base_model_name_or_path", "")
+    adapter_cfg["base_model_name_or_path"] = BASE_MODEL_PATH
+    with open(adapter_config_path, "w") as f:
+        json.dump(adapter_cfg, f)
+
     try:
         print(f"   Base Model: {BASE_MODEL_PATH}")
         model, tokenizer = FastLanguageModel.from_pretrained(
-            model_name=BASE_MODEL_PATH,
+            model_name=LORA_MODEL_DIR,
             max_seq_length=MAX_SEQ_LENGTH,
             dtype=None,
             load_in_4bit=False,
             local_files_only=True,
         )
-        print("   Attaching LoRA adapters...")
-        model.load_adapter(LORA_MODEL_DIR)
     except Exception as e:
         print(f"\n❌ 模型加载失败: {e}")
         return
+    finally:
+        # 恢复原始路径
+        adapter_cfg["base_model_name_or_path"] = original_base
+        with open(adapter_config_path, "w") as f:
+            json.dump(adapter_cfg, f)
 
     FastLanguageModel.for_inference(model)
 
@@ -214,8 +227,8 @@ def main():
     output_log = os.path.join(os.path.dirname(DATA_FILE), "evaluation_results_hybrid_rule.json")
     with open(output_log, 'w') as f:
         json.dump({
-            "coarse_accuracy": coarse_acc,
-            "fine_accuracy": fine_acc,
+            "coarse_accuracy": acc_c,
+            "fine_accuracy": acc_f,
             "y_true_fine": y_true_fine,
             "y_pred_fine": y_pred_fine
         }, f)
