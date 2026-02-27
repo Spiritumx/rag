@@ -12,7 +12,7 @@ import json
 from datasets import load_dataset
 from unsloth import FastLanguageModel
 from tqdm import tqdm
-from sklearn.metrics import classification_report, accuracy_score, confusion_matrix
+from collections import Counter
 
 # --- 路径配置 (请确保与训练时一致) ---
 LORA_MODEL_DIR = "/root/autodl-tmp/output/Qwen2.5-3B-RAG-Router/lora_model"
@@ -148,34 +148,67 @@ def main():
     y_true_coarse = [map_to_coarse(y) for y in y_true_fine]
     y_pred_coarse = [map_to_coarse(y) for y in y_pred_fine]
 
-    # ===== 报告输出 =====
+    def compute_metrics(y_true, y_pred, labels):
+        rows = {}
+        for l in labels:
+            tp = sum(1 for t, p in zip(y_true, y_pred) if t == l and p == l)
+            fp = sum(1 for t, p in zip(y_true, y_pred) if t != l and p == l)
+            fn = sum(1 for t, p in zip(y_true, y_pred) if t == l and p != l)
+            support = sum(1 for t in y_true if t == l)
+            prec = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+            rec  = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+            f1   = 2 * prec * rec / (prec + rec) if (prec + rec) > 0 else 0.0
+            rows[l] = dict(prec=prec, rec=rec, f1=f1, support=support)
+        acc = sum(1 for t, p in zip(y_true, y_pred) if t == p) / len(y_true)
+        macro_p = sum(rows[l]['prec'] for l in labels) / len(labels)
+        macro_r = sum(rows[l]['rec']  for l in labels) / len(labels)
+        macro_f = sum(rows[l]['f1']   for l in labels) / len(labels)
+        return rows, acc, (macro_p, macro_r, macro_f)
 
-    print("\n" + "#" * 60)
-    print("🚀 Coarse-grained Evaluation (Z vs S vs M)")
-    print("#" * 60)
-    coarse_acc = accuracy_score(y_true_coarse, y_pred_coarse)
-    print(f"🏆 Overall Accuracy: {coarse_acc:.4f} ({coarse_acc:.2%})")
+    def print_report(rows, acc, macro, labels):
+        print(f"\n{'类别':<12} {'Precision':>10} {'Recall':>10} {'F1':>10} {'Support':>8}")
+        print("-" * 55)
+        for l in labels:
+            r = rows[l]
+            print(f"{l:<12} {r['prec']:10.4f} {r['rec']:10.4f} {r['f1']:10.4f} {r['support']:8d}")
+        print("-" * 55)
+        print(f"{'宏平均':<12} {macro[0]:10.4f} {macro[1]:10.4f} {macro[2]:10.4f}")
+        print(f"\n总体准确率: {acc:.4f} ({acc:.2%})")
+
+    def print_confusion(y_true, y_pred, labels):
+        header = "True \\ Pred"
+        print(f"\n{header:<12}", end="")
+        for l in labels:
+            print(f" {l:<10}", end="")
+        print()
+        for tl in labels:
+            print(f"{tl:<12}", end="")
+            for pl in labels:
+                count = sum(1 for t, p in zip(y_true, y_pred) if t == tl and p == pl)
+                print(f" {count:<10}", end="")
+            print()
+
+    # ===== 粗粒度报告 =====
     labels_coarse = ["Z", "S", "M"]
-    print(classification_report(y_true_coarse, y_pred_coarse, labels=labels_coarse, digits=4))
+    rows_c, acc_c, macro_c = compute_metrics(y_true_coarse, y_pred_coarse, labels_coarse)
+    print("\n" + "#" * 60)
+    print("Coarse-grained Evaluation (Z vs S vs M)")
+    print("#" * 60)
+    print_report(rows_c, acc_c, macro_c, labels_coarse)
+    print_confusion(y_true_coarse, y_pred_coarse, labels_coarse)
 
-    print("\n[Confusion Matrix (Coarse)]")
-    header = "True \\ Pred"
-    print(f"{header:<12} {'Z':<8} {'S':<8} {'M':<8}")
-    cm = confusion_matrix(y_true_coarse, y_pred_coarse, labels=labels_coarse)
-    for idx, label in enumerate(labels_coarse):
-        print(f"{label:<12} {cm[idx][0]:<8} {cm[idx][1]:<8} {cm[idx][2]:<8}")
-
-    print("\n" + "=" * 60)
-    print("🔬 Fine-grained Evaluation (5-class)")
-    print("=" * 60)
+    # ===== 细粒度报告 =====
     labels_fine = ["Z", "S-Sparse", "S-Dense", "S-Hybrid", "M"]
-    fine_acc = accuracy_score(y_true_fine, y_pred_fine)
-    print(f"🏆 Overall Accuracy: {fine_acc:.4f} ({fine_acc:.2%})")
-    print(classification_report(y_true_fine, y_pred_fine, labels=labels_fine, digits=4))
+    rows_f, acc_f, macro_f = compute_metrics(y_true_fine, y_pred_fine, labels_fine)
+    print("\n" + "=" * 60)
+    print("Fine-grained Evaluation (5-class)")
+    print("=" * 60)
+    print_report(rows_f, acc_f, macro_f, labels_fine)
+    print_confusion(y_true_fine, y_pred_fine, labels_fine)
 
     unknown_count = y_pred_fine.count("Unknown")
     if unknown_count > 0:
-        print(f"\n⚠️ Warning: {unknown_count} samples could not be parsed (Unknown).")
+        print(f"\nWarning: {unknown_count} samples could not be parsed (Unknown).")
 
     # 保存结果
     output_log = os.path.join(os.path.dirname(DATA_FILE), "evaluation_results_hybrid_rule.json")
